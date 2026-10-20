@@ -204,7 +204,6 @@
     } else {
       if (S.hasResume) add({ id: 'resume', ico: 'play', label: 'Continuar', sub: 'Donde lo dejaste', act: () => launch('resume'), hero: 'resume' });
       add({ id: 'new', ico: 'spark', label: 'Nueva partida', sub: 'Desde el encendido de la consola', act: () => launch('new'), hero: 'new' });
-      add({ id: 'scenes', ico: 'grid', label: 'Selector de escenas', panel: 'scenes' });
       add({ id: 'director', ico: 'clap', label: "Director's Mode", panel: 'director' });
       add({ id: 'graphics', ico: 'screen', label: 'Gráficos', panel: 'graphics' });
       add({ id: 'audio', ico: 'wave', label: 'Audio', panel: 'audio' });
@@ -222,9 +221,10 @@
   }
 
   // ================================================================ UI state
-  const ui = { sec: 0, zone: 'menu', pidx: 0, tab: 1, compare: false, pimg: 0, intro: false };
+  const ui = { sub: null, sec: 0, zone: 'menu', pidx: 0, tab: 1, compare: false, pimg: 0, intro: false };
   let fx = null, fxImgs = [];
   let panelKey = '';
+  const P = (sec) => ui.sub || sec.panel; // active panel (sub-panels open inside a section)
 
   function sceneTabs() {
     const tabs = [{ name: 'Prólogo', short: 'P', filter: (c) => c.level === 0 && c.kind !== 'crash' }];
@@ -246,7 +246,7 @@
     });
     $('nav.menu').innerHTML = m;
     $$('nav.menu .item').forEach((el) => {
-      el.onclick = () => { const i = +el.dataset.i; if (i !== ui.sec) { ui.sec = i; ui.zone = 'menu'; sync(true); } press('A'); };
+      el.onclick = () => { const i = +el.dataset.i; if (i !== ui.sec) { ui.sec = i; ui.sub = null; ui.zone = 'menu'; sync(true); } press('A'); };
     });
   }
 
@@ -255,16 +255,16 @@
     const p = $('main.panel');
     p.innerHTML = panelHtml(sec);
     if (animate) { p.classList.remove('enter'); void p.offsetWidth; p.classList.add('enter'); }
-    panelKey = sec.id + ':' + ui.tab + ':' + ui.compare;
+    panelKey = sec.id + ':' + ui.sub + ':' + ui.tab + ':' + ui.compare;
     focusables().forEach((el, i) => { el.onclick = () => { ui.zone = 'panel'; ui.pidx = i; updateFocus(); press('A'); }; });
     $$('video', p).forEach(wireVideo);
-    if (sec.panel === 'graphics' && !PAUSE) drawPreview();
+    if (P(sec) === 'graphics' && !PAUSE) drawPreview();
   }
 
   // full sync: rebuild the panel if its content changed, then move the focus
   function sync(animate) {
     const sec = SECTIONS[ui.sec];
-    const key = sec.id + ':' + ui.tab + ':' + ui.compare;
+    const key = sec.id + ':' + ui.sub + ':' + ui.tab + ':' + ui.compare;
     if (key !== panelKey) renderPanel(animate);
     updateFocus();
   }
@@ -322,7 +322,7 @@
       return '<div class="error-box"><h2>Faltan los datos del juego</h2><p>Esta APK se compiló sin los archivos de ' +
         'Super Road Blaster (ROM, .msu y .pcm). Indica su carpeta en <b>gradle.properties</b> (srbGameDir) y vuelve a compilar.</p></div>';
     }
-    switch (sec.panel) {
+    switch (P(sec)) {
       case 'director': return panelDirector();
       case 'graphics': return panelGraphics();
       case 'audio': return panelAudio();
@@ -494,16 +494,16 @@
 
   function onFocusChanged() {
     const sec = SECTIONS[ui.sec];
-    if (sec.panel === 'scenes') updateScenePreview();
+    if (P(sec) === 'scenes') updateScenePreview();
   }
 
   function updateFooter() {
     const sec = SECTIONS[ui.sec];
     let k = '<span><span class="key a">A</span>Aceptar</span><span><span class="key b">B</span>' + (ui.zone === 'menu' && PAUSE ? 'Volver al juego' : 'Atrás') + '</span>';
     if (ui.zone === 'panel' && $('main.panel .opt.focus[data-opt]')) k += '<span><span class="key">◀ ▶</span>Cambiar</span>';
-    if (sec.panel === 'scenes') k += '<span><span class="key">L</span><span class="key">R</span>Nivel</span>';
-    if (sec.panel === 'graphics' && !PAUSE) k += '<span><span class="key y">Y</span>Comparar</span><span><span class="key x">X</span>Otra imagen</span>';
-    const html = k + '<span class="ver">v1.2 · Snes9x MSU-1 · ARM64</span>';
+    if (P(sec) === 'scenes') k += '<span><span class="key">L</span><span class="key">R</span>Nivel</span>';
+    if (P(sec) === 'graphics' && !PAUSE) k += '<span><span class="key y">Y</span>Comparar</span><span><span class="key x">X</span>Otra imagen</span>';
+    const html = k;
     const f = $('footer');
     if (f.dataset.h !== html) { f.innerHTML = html; f.dataset.h = html; }
   }
@@ -569,6 +569,7 @@
     if (ui.zone === 'menu') {
       if (tok === 'UP' || tok === 'DOWN') {
         ui.sec = (ui.sec + (tok === 'UP' ? -1 : 1) + SECTIONS.length) % SECTIONS.length;
+        ui.sub = null;
         Sfx.play('move', 0.45);
         sync(true);
         return;
@@ -579,32 +580,33 @@
         return;
       }
       if (tok === 'B') { if (PAUSE) { Sfx.play('back'); Bridge.action('resume', ''); } return; }
-      if ((tok === 'L' || tok === 'R') && sec.panel === 'scenes') { switchTab(tok === 'L' ? -1 : 1); return; }
-      if (tok === 'X' && sec.panel === 'graphics') { ui.pimg++; Sfx.play('tab'); drawPreview(); return; }
-      if (tok === 'Y' && sec.panel === 'graphics') { ui.compare = !ui.compare; Sfx.play('tab'); sync(false); return; }
+      if ((tok === 'L' || tok === 'R') && P(sec) === 'scenes') { switchTab(tok === 'L' ? -1 : 1); return; }
+      if (tok === 'X' && P(sec) === 'graphics') { ui.pimg++; Sfx.play('tab'); drawPreview(); return; }
+      if (tok === 'Y' && P(sec) === 'graphics') { ui.compare = !ui.compare; Sfx.play('tab'); sync(false); return; }
       return;
     }
     // ---- panel zone
     const fs = focusables();
     const el = fs[ui.pidx];
+    if (ui.sub && (tok === 'B')) { closeSub(); return; }
     if (tok === 'B') { ui.zone = 'menu'; Sfx.play('back', 0.5); updateFocus(); return; }
-    if (sec.panel === 'scenes' || sec.panel === 'slots') {
+    if (P(sec) === 'scenes' || P(sec) === 'slots') {
       if (['LEFT', 'RIGHT', 'UP', 'DOWN'].includes(tok)) {
         const n = spatial(tok, fs, ui.pidx);
-        if (n < 0) { if (tok === 'LEFT') { ui.zone = 'menu'; Sfx.play('back', 0.4); updateFocus(); } return; }
+        if (n < 0) { if (tok === 'LEFT') { if (ui.sub) { closeSub(); return; } ui.zone = 'menu'; Sfx.play('back', 0.4); updateFocus(); } return; }
         ui.pidx = n;
         Sfx.play('move', 0.45);
         updateFocus();
         return;
       }
-      if ((tok === 'L' || tok === 'R') && sec.panel === 'scenes') { switchTab(tok === 'L' ? -1 : 1); ui.pidx = 0; updateFocus(); return; }
-      if (tok === 'A' && el && sec.panel === 'scenes') {
+      if ((tok === 'L' || tok === 'R') && P(sec) === 'scenes') { switchTab(tok === 'L' ? -1 : 1); ui.pidx = 0; updateFocus(); return; }
+      if (tok === 'A' && el && P(sec) === 'scenes') {
         const id = +el.dataset.scene;
         if (!(S.byId[id] && S.byId[id].hasState)) { Sfx.play('error'); toast('Escena no disponible'); return; }
         if (PAUSE) { Sfx.play('confirm'); Bridge.action('scene', String(id)); } else launch('scene:' + id);
         return;
       }
-      if (tok === 'A' && el && sec.panel === 'slots') {
+      if (tok === 'A' && el && P(sec) === 'slots') {
         const slot = el.dataset.slot;
         const info = (S.slots || []).find((s) => String(s.slot) === slot);
         if (sec.slotMode === 'save') { Sfx.play('confirm'); Bridge.action('save', slot); setTimeout(refresh, 450); return; }
@@ -624,6 +626,12 @@
     if (tok === 'A' && el && el.dataset.opt) { cycle(el.dataset.opt, 1); return; }
     if (tok === 'A' && el && el.dataset.act) {
       if (el.dataset.act === 'movie') { launch('movie'); return; }
+      if (el.dataset.act === 'scenes' && !SECTIONS.some((x) => x.id === 'scenes')) {
+        Sfx.play('confirm');
+        ui.sub = 'scenes'; ui.pidx = 0;
+        sync(true);
+        return;
+      }
       if (el.dataset.act === 'scenes') {
         Sfx.play('confirm');
         ui.sec = SECTIONS.findIndex((s) => s.id === 'scenes'); ui.zone = 'panel'; ui.pidx = 0;
@@ -631,8 +639,18 @@
       }
       return;
     }
-    if (tok === 'X' && sec.panel === 'graphics') { ui.pimg++; Sfx.play('tab'); drawPreview(); return; }
-    if (tok === 'Y' && sec.panel === 'graphics') { ui.compare = !ui.compare; Sfx.play('tab'); const keep = ui.pidx; sync(false); ui.pidx = keep; updateFocus(); }
+    if (tok === 'X' && P(sec) === 'graphics') { ui.pimg++; Sfx.play('tab'); drawPreview(); return; }
+    if (tok === 'Y' && P(sec) === 'graphics') { ui.compare = !ui.compare; Sfx.play('tab'); const keep = ui.pidx; sync(false); ui.pidx = keep; updateFocus(); }
+  }
+
+  function closeSub() {
+    const from = ui.sub;
+    ui.sub = null;
+    Sfx.play('back', 0.5);
+    sync(true);
+    const i = focusables().findIndex((el) => el.dataset.act === from);
+    ui.pidx = i >= 0 ? i : 0;
+    updateFocus();
   }
 
   function switchTab(d) {
