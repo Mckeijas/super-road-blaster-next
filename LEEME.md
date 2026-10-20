@@ -38,10 +38,24 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\app-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.3.0-release.apk`
    (≈ 1 GB: lleva dentro el vídeo).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
+
+### Versiones y nombre de la APK
+La versión está en `android/gradle.properties` → `srbVersion=1.3.0`. **Súbela antes de cada
+build que vayas a instalar** (1.3.0 → 1.3.1 para arreglos, 1.4.0 para novedades). La APK sale
+con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
+*Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
+(1.3.0 → 10300); Android no permite instalar una versión con número menor que la instalada.
+
+### Aviso «app potencialmente insegura» (Play Protect)
+Sale con cualquier APK instalada fuera de Google Play que Google no conozca; no depende del
+nombre ni de la versión. Pulsa **Más detalles ▸ Instalar de todos modos**. Si te ofrece
+«Enviar la app para análisis», puedes decir que no (la APK lleva el vídeo del juego).
+Mientras la firma (`srbn.keystore`) y el nombre de paquete no cambien, las actualizaciones
+se instalan encima sin problemas.
 
 ### Firma fija: actualizar sin perder partidas
 Todas las compilaciones se firman con `android\keystore\srbn.keystore`, así que cada APK
@@ -51,8 +65,8 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 
 ## 2. Instalar
 
-- Copia `app-release.apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r app-release.apk`.
+- Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.3.0-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ## 3. El launcher

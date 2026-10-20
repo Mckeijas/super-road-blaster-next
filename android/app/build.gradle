@@ -2,6 +2,17 @@ plugins {
     id 'com.android.application'
 }
 
+// --- Versión y nombre de la APK ----------------------------------------------------------
+// srbVersion (gradle.properties) = MAYOR.MENOR.PARCHE  ->  versionCode = MAYOR*10000+MENOR*100+PARCHE
+def srbVersionName = (project.findProperty('srbVersion') ?: '1.3.0').toString().trim()
+def srbParts = srbVersionName.tokenize('.').collect { it.replaceAll('[^0-9]', '') as int }
+while (srbParts.size() < 3) srbParts << 0
+def srbVersionCode = srbParts[0] * 10000 + srbParts[1] * 100 + srbParts[2]
+// APK: SuperRoadBlasterNext-v1.3.0-release.apk / SuperRoadBlasterNext-v1.3.0-debug.apk
+base {
+    archivesName = "SuperRoadBlasterNext-v${srbVersionName}"
+}
+
 android {
     namespace 'com.srbport.roadblaster'
     compileSdk 35
@@ -10,8 +21,8 @@ android {
         applicationId 'com.srbport.roadblaster'
         minSdk 30
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        versionCode srbVersionCode
+        versionName srbVersionName
         ndk {
             abiFilters 'arm64-v8a'          // AYN Odin 2 Portal (Snapdragon 8 Gen 2)
         }
