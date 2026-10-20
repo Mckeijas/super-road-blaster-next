@@ -360,8 +360,7 @@
       return '<div class="hero">' + heroShot(ch ? ch.id : 37, 'Continuar', ch ? ch.title : 'Tu partida',
         'Retoma la persecución exactamente donde la dejaste, con tus puntos y tus vidas.', directorChips()) + '</div>';
     }
-    if (sec.hero === 'new') return '<div class="hero">' + heroShot(3, 'Nueva partida', 'Arranca el motor',
-      'Desde el encendido de la consola: logo, pantalla de título y nueve niveles de persecución.', directorChips()) + '</div>';
+    if (sec.hero === 'new') return '<div class="hero">' + heroShot(3, 'Nueva partida', 'Arranca el motor', '', directorChips()) + '</div>';
     if (sec.hero === 'movie') return '<div class="hero">' + heroShot(112, 'Modo película', 'La aventura completa',
       'De principio a fin sin tocar nada: QTE automático, sin marcador y sin choques. Unos 19 minutos de anime.',
       '<span class="chip hot">≈ 19 min</span><span class="chip">Sin manos</span><span class="chip">' + (setting('audio') === 'enhanced' ? 'MSU-1 Enhanced' : 'Audio original') + '</span>') + '</div>';
@@ -534,7 +533,6 @@
   // ---------------------------------------------------------------- in-game pause (START)
   const MINI = [
     { label: 'Continuar', act: () => Bridge.action('resume', '') },
-    { label: 'Opciones', act: () => { window.srbOpen(); } },
     { label: 'Salir al menú principal', act: () => Bridge.action('menu', '') },
   ];
   let mini = false, miniIdx = 0;
