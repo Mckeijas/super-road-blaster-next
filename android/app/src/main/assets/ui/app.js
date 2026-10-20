@@ -735,7 +735,7 @@
     d.className = 'intro';
     d.innerHTML = '<div class="sky"></div><div class="stars"></div><div class="glow"></div><div class="sunclip"><div class="sun"></div></div><div class="floor"><i></i></div>' +
       '<div class="title"><div class="l1">SUPER</div><div class="l2" data-t="Road Blaster">Road Blaster</div><div class="next">NEXT</div><div class="kana">ロードブラスター</div></div>' +
-      '<div class="press"><b>PULSA START</b></div><div class="copy">Super Road Blaster Next · Port para AYN Odin 2 Portal</div>';
+      '<div class="press"><b>PULSA START</b></div>';
     d.onclick = () => closeIntro();
     document.body.appendChild(d);
   }

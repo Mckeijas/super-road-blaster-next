@@ -23,14 +23,28 @@ android {
         }
     }
 
+    // Fixed signing key: every build (debug and release) is signed with the same key, so
+    // new versions install over the old one and your saves are kept. Keep a backup of
+    // android/keystore/srbn.keystore: if it is lost, Android will refuse updates and the
+    // app would have to be uninstalled (deleting its data) before installing.
+    signingConfigs {
+        srbn {
+            storeFile rootProject.file('keystore/srbn.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
     buildTypes {
         debug {
             // the emulator is always compiled with optimisations (see CMakeLists.txt)
             debuggable true
+            signingConfig signingConfigs.srbn
         }
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug   // installable without creating a keystore
+            signingConfig signingConfigs.srbn
         }
     }
 
