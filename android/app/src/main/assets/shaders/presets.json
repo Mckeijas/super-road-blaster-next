@@ -1,0 +1,145 @@
+{
+  "_doc": "Shared by the Android renderer (GameRenderer.java) and the launcher preview (srbfx.js). size: src = input size, out = output size. crop is applied on the first pass that reads the game frame at output size.",
+  "presets": {
+    "original": {
+      "name": "Original nítido",
+      "passes": [
+        {
+          "shader": "sharp",
+          "size": "out",
+          "crop": true,
+          "params": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "colorParam": 1
+        }
+      ]
+    },
+    "smooth": {
+      "name": "Suavizado",
+      "passes": [
+        {
+          "shader": "sharp",
+          "size": "out",
+          "crop": true,
+          "params": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "colorParam": 1
+        }
+      ]
+    },
+    "hd": {
+      "name": "Restauración HD",
+      "passes": [
+        {
+          "shader": "restore",
+          "size": "src",
+          "crop": false,
+          "params": [
+            0.8,
+            0.0,
+            0.085,
+            0.0
+          ],
+          "colorParam": 1
+        },
+        {
+          "shader": "easu",
+          "size": "out",
+          "crop": true,
+          "params": [
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "shader": "refine",
+          "size": "out",
+          "crop": false,
+          "params": [
+            0.5,
+            0.4,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "hd_strong": {
+      "name": "Restauración HD+ (intensa)",
+      "passes": [
+        {
+          "shader": "restore",
+          "size": "src",
+          "crop": false,
+          "params": [
+            1.0,
+            0.0,
+            0.13,
+            0.0
+          ],
+          "colorParam": 1
+        },
+        {
+          "shader": "restore",
+          "size": "src",
+          "crop": false,
+          "params": [
+            0.7,
+            0.0,
+            0.07,
+            0.0
+          ]
+        },
+        {
+          "shader": "easu",
+          "size": "out",
+          "crop": true,
+          "params": [
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "shader": "refine",
+          "size": "out",
+          "crop": false,
+          "params": [
+            0.8,
+            0.75,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "crt": {
+      "name": "CRT clásico",
+      "passes": [
+        {
+          "shader": "crt",
+          "size": "out",
+          "crop": true,
+          "params": [
+            0.75,
+            0.0,
+            0.35,
+            0.0
+          ],
+          "colorParam": 1
+        }
+      ]
+    }
+  }
+}

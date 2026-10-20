@@ -1,0 +1,90 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.srbport.roadblaster'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.srbport.roadblaster'
+        minSdk 30
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+        ndk {
+            abiFilters 'arm64-v8a'          // AYN Odin 2 Portal (Snapdragon 8 Gen 2)
+        }
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_static', '-DCMAKE_BUILD_TYPE=Release'
+                cppFlags '-O3'
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            // the emulator is always compiled with optimisations (see CMakeLists.txt)
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug   // installable without creating a keystore
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    externalNativeBuild {
+        cmake {
+            path 'src/main/cpp/CMakeLists.txt'
+            version '3.22.1'
+        }
+    }
+
+    androidResources {
+        // Stored uncompressed so the game can read them directly from the APK.
+        noCompress += ['msu', 'pcm', 'flac', 'sfc']
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging false
+        }
+    }
+}
+
+// --- Game data -----------------------------------------------------------------------
+// The ROM / MSU-1 files are YOUR dump and are never stored in the source tree:
+// they are copied into the APK at build time from srbGameDir.
+def srbGameDir = rootProject.file(project.findProperty('srbGameDir') ?: '../..')
+def srbGameDataDir = rootProject.file(project.findProperty('srbGameDataDir') ?: '../gamedata')
+def srbAssetsOut = layout.buildDirectory.dir('generated/srbassets').get().asFile
+
+def prepareGameAssets = tasks.register('prepareGameAssets', Sync) {
+    description = 'Copies the Super Road Blaster game files into the APK assets.'
+    into(new File(srbAssetsOut, 'game'))
+    // explicit file list: the game folder may also contain this project (and its build outputs)
+    from(files(['SuperRoadBlaster.sfc', 'SuperRoadBlaster.msu'].collect { new File(srbGameDir, it) } +
+               (0..121).collect { new File(srbGameDir, "SuperRoadBlaster-${it}.pcm") }))
+    from(srbGameDataDir) {
+        include 'states/*.state', 'enhanced/*.flac'
+    }
+    doFirst {
+        if (!new File(srbGameDir, 'SuperRoadBlaster.msu').exists()) {
+            throw new GradleException("No encuentro SuperRoadBlaster.msu en '${srbGameDir}'. " +
+                    "Revisa srbGameDir en gradle.properties.")
+        }
+        if (!new File(srbGameDataDir, 'states').exists()) {
+            throw new GradleException("No encuentro la carpeta gamedata/states en '${srbGameDataDir}'.")
+        }
+    }
+}
+
+android.sourceSets.main.assets.srcDir(srbAssetsOut)
+
+tasks.named('preBuild') { dependsOn prepareGameAssets }

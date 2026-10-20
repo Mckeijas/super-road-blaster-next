@@ -1,0 +1,596 @@
+C 0 0 3250 game_over
+C 1 0 30606 highscores
+C 2 0 119143 intro
+C 3 1 7000 level1
+C 4 1 11719 level1_checkpoint1
+E direction-right 114 134
+E direction-left 143 163
+E direction-left 196 219
+E direction-right 234 257
+C 5 1 29900 level1_checkpoint2
+E brake 68 114
+E direction-right 217 232
+E direction-right 344 364
+E direction-right 412 434
+E accelerate 457 479
+E accelerate 497 511
+E direction-right 606 629
+E direction-left 662 678
+R 170
+R 297
+R 381
+R 476
+R 508
+R 622
+C 6 1 35350 level1_checkpoint3
+E accelerate 115 139
+E accelerate 149 163
+E accelerate 166 180
+E direction-right 277 299
+E direction-left 356 378
+E direction-right 428 508
+E direction-right 576 600
+E direction-right 624 648
+E direction-left 691 714
+E direction-left 781 803
+E brake 816 846
+E direction-left 830 846
+R 53
+R 137
+R 160
+R 179
+C 7 1 20650 level1_checkpoint4
+E direction-right 72 92
+E direction-left 106 126
+E direction-left 148 166
+E direction-right 184 201
+E direction-right 219 242
+E direction-left 254 272
+E direction-right 299 314
+E direction-left 329 343
+E accelerate 367 389
+E brake 423 447
+E direction-left 423 448
+E direction-right 471 492
+R 165
+R 388
+C 8 1 51700 level1_checkpoint5
+E direction-left 78 101
+E direction-right 175 197
+E direction-right 362 384
+E direction-left 470 488
+E direction-right 510 521
+E accelerate 603 624
+E direction-left 603 624
+E accelerate 820 845
+E accelerate 940 974
+E brake 981 1004
+E direction-right 981 1004
+R 396
+R 430
+R 576
+R 783
+R 821
+R 846
+R 866
+R 890
+R 930
+C 9 0 2550 level1_crash1
+C 10 0 3837 level1_crash10
+C 11 0 4220 level1_crash11
+C 12 0 3800 level1_crash12
+C 13 0 2390 level1_crash13
+C 14 0 3956 level1_crash2
+C 15 0 3795 level1_crash3
+C 16 0 3920 level1_crash4
+C 17 0 3750 level1_crash5
+C 18 0 3881 level1_crash6
+C 19 0 6590 level1_crash7
+C 20 0 6590 level1_crash8
+C 21 0 3750 level1_crash9
+C 22 2 17080 level2
+E direction-left 103 121
+E direction-right 124 140
+E direction-left 198 218
+E direction-right 224 242
+E direction-right 357 379
+E brake 357 379
+E direction-left 386 479
+C 23 2 36250 level2_checkpoint1
+E direction-left 68 91
+E accelerate 133 157
+E accelerate 185 208
+E direction-right 288 300
+E accelerate 402 438
+E direction-left 490 510
+E direction-right 523 546
+E direction-left 547 569
+E direction-right 570 588
+E direction-right 626 645
+E accelerate 671 739
+E accelerate 756 786
+E direction-left 829 841
+E direction-right 843 863
+R 69
+R 156
+R 209
+R 431
+R 618
+R 738
+R 786
+C 24 2 48000 level2_checkpoint2
+E brake 96 122
+E accelerate 125 185
+E direction-left 228 251
+E direction-right 297 320
+E direction-left 334 362
+E direction-right 400 424
+E accelerate 434 485
+E accelerate 523 552
+E direction-left 644 660
+E direction-right 686 712
+E accelerate 726 758
+E direction-left 854 877
+E brake 917 940
+R 543
+C 25 0 3584 level2_crash1
+C 26 0 3956 level2_crash10
+C 27 0 3859 level2_crash11
+C 28 0 3880 level2_crash2
+C 29 0 3600 level2_crash3
+C 30 0 3747 level2_crash4
+C 31 0 3830 level2_crash5
+C 32 0 2620 level2_crash6
+C 33 0 3460 level2_crash7
+C 34 0 3795 level2_crash8
+C 35 0 4082 level2_crash9
+C 36 3 31732 level3
+E direction-left 63 82
+E direction-right 96 130
+E direction-right 219 240
+E direction-left 255 273
+E direction-right 293 310
+E direction-left 322 344
+E direction-left 388 423
+E direction-left 464 486
+E direction-right 571 587
+E direction-left 604 624
+E direction-left 683 701
+E direction-right 724 746
+R 366
+R 446
+R 506
+C 37 3 18600 level3_checkpoint1
+E brake 59 84
+E direction-right 59 84
+E direction-left 109 132
+E direction-left 200 223
+E direction-left 240 263
+E accelerate 266 289
+E accelerate 357 395
+E direction-right 372 395
+E direction-left 410 434
+R 189
+R 236
+R 285
+C 38 3 52185 level3_checkpoint2
+E direction-right 68 89
+E direction-left 119 137
+E direction-left 158 181
+E accelerate 174 236
+E direction-left 431 447
+E direction-right 460 483
+E accelerate 599 617
+E direction-left 709 732
+E direction-left 764 792
+E accelerate 788 817
+E direction-left 868 889
+E direction-right 896 916
+E accelerate 987 1017
+E direction-right 999 1034
+R 245
+R 692
+R 764
+R 810
+C 39 0 2840 level3_crash1
+C 40 0 4900 level3_crash2
+C 41 0 4910 level3_crash3
+C 42 0 4174 level3_crash4
+C 43 0 4138 level3_crash5
+C 44 0 4590 level3_crash6
+C 45 0 4052 level3_crash7
+C 46 4 20373 level4
+E direction-right 30 53
+E direction-left 75 96
+E direction-right 117 141
+E direction-left 156 179
+E brake 156 179
+E direction-right 264 286
+E direction-left 302 325
+E direction-right 337 359
+E direction-left 378 401
+E direction-right 428 450
+R 121
+R 212
+C 47 4 14100 level4_checkpoint1
+E accelerate 37 67
+E direction-right 73 93
+E direction-right 105 127
+E accelerate 159 181
+E accelerate 219 241
+E brake 289 312
+E direction-right 300 321
+R 67
+R 102
+R 180
+R 240
+C 48 4 24200 level4_checkpoint2
+E direction-left 19 39
+E direction-right 57 74
+E accelerate 117 146
+E direction-left 169 189
+E direction-right 191 212
+E direction-left 229 249
+E direction-left 271 293
+E direction-right 342 365
+E direction-left 367 386
+E accelerate 469 492
+E direction-right 520 538
+E direction-left 551 565
+R 138
+R 222
+R 279
+R 320
+R 491
+C 49 4 37046 level4_checkpoint3
+E accelerate 31 63
+E brake 162 185
+E direction-left 221 242
+E direction-left 254 279
+E accelerate 380 404
+E brake 591 614
+E direction-right 612 645
+R 113
+R 329
+R 645
+C 50 0 4090 level4_crash1
+C 51 0 3680 level4_crash2
+C 52 0 3699 level4_crash3
+C 53 0 3650 level4_crash4
+C 54 0 3850 level4_crash5
+C 55 0 3790 level4_crash6
+C 56 0 3683 level4_crash7
+C 57 5 22100 level5
+E accelerate 78 102
+E accelerate 108 127
+E accelerate 196 234
+E accelerate 311 335
+E direction-left 363 403
+E direction-right 411 427
+E direction-left 428 441
+E direction-right 443 459
+R 122
+R 326
+R 476
+C 58 5 37050 level5_checkpoint1
+E direction-right 57 77
+E direction-left 98 121
+E direction-left 177 201
+E direction-right 281 299
+E direction-left 303 321
+E direction-right 369 385
+E direction-right 425 446
+E direction-right 522 545
+E accelerate 554 581
+E direction-right 624 645
+E accelerate 686 747
+E direction-right 825 848
+E direction-right 857 875
+R 608
+R 807
+C 59 5 31800 level5_checkpoint2
+E accelerate 41 83
+E direction-right 153 181
+E direction-left 202 222
+E direction-right 224 244
+E accelerate 292 337
+E direction-left 386 405
+E direction-right 407 423
+E direction-left 425 440
+E direction-right 456 471
+E direction-right 537 556
+E accelerate 537 556
+E direction-right 618 634
+E brake 618 634
+R 444
+R 624
+C 60 0 5300 level5_crash1
+C 61 0 4679 level5_crash2
+C 62 0 2880 level5_crash3
+C 63 0 3000 level5_crash4
+C 64 0 3000 level5_crash5
+C 65 0 4540 level5_crash6
+C 66 0 3031 level5_crash7
+C 67 0 2679 level5_crash8
+C 68 6 26843 level6
+E direction-left 100 124
+E direction-left 152 172
+E direction-right 177 198
+E accelerate 220 274
+E direction-right 336 354
+E direction-left 362 385
+E direction-right 396 420
+E direction-right 447 470
+E direction-right 564 586
+E accelerate 564 586
+E direction-left 616 640
+R 273
+R 449
+C 69 6 20660 level6_checkpoint1
+E accelerate 46 81
+E direction-right 187 215
+E accelerate 187 215
+E direction-left 225 247
+E direction-right 280 293
+E direction-left 328 342
+E accelerate 386 416
+R 81
+C 70 6 18450 level6_checkpoint2
+E direction-right 54 64
+E direction-left 87 97
+E direction-right 123 145
+E brake 200 253
+E accelerate 260 282
+E direction-left 313 326
+E direction-right 330 346
+E direction-left 355 375
+E direction-left 404 423
+R 105
+C 71 6 16940 level6_checkpoint3
+E accelerate 35 67
+E direction-right 142 156
+E direction-left 161 174
+E direction-right 201 215
+E direction-left 232 244
+E direction-right 335 356
+E direction-left 391 404
+R 325
+C 72 6 19283 level6_checkpoint4
+E direction-left 43 63
+E direction-right 86 100
+E accelerate 133 169
+E accelerate 189 214
+E accelerate 232 256
+E accelerate 296 329
+R 164
+R 213
+R 253
+C 73 0 2840 level6_crash1
+C 74 0 2210 level6_crash2
+C 75 0 3500 level6_crash3
+C 76 0 2585 level6_crash4
+C 77 0 3760 level6_crash5
+C 78 0 4539 level6_crash6
+C 79 0 2810 level6_crash7
+C 80 0 3923 level6_crash8
+C 81 7 30998 level7
+E direction-left 312 332
+E direction-right 391 411
+E direction-right 459 478
+E direction-right 538 561
+E direction-left 593 613
+E direction-right 691 709
+E direction-left 724 743
+C 82 7 14720 level7_checkpoint1
+E direction-right 52 69
+E direction-left 86 94
+E accelerate 153 175
+E direction-right 209 227
+E accelerate 325 353
+R 173
+C 83 7 35490 level7_checkpoint2
+E direction-right 88 104
+E direction-left 155 178
+E brake 155 178
+E direction-right 210 228
+E accelerate 307 330
+E direction-right 371 395
+E direction-left 419 438
+E direction-right 471 492
+E direction-left 617 640
+E direction-left 657 678
+E accelerate 732 756
+E direction-right 791 806
+E accelerate 837 851
+E direction-left 837 851
+R 77
+R 328
+R 534
+R 553
+R 604
+R 755
+R 850
+C 84 7 27565 level7_checkpoint3
+E direction-left 128 149
+E direction-right 157 173
+E direction-right 186 204
+E direction-left 211 224
+E direction-left 258 274
+E direction-right 284 296
+E brake 364 386
+E direction-right 442 462
+E direction-left 472 486
+E accelerate 539 561
+R 461
+R 487
+R 561
+C 85 0 2880 level7_crash1
+C 86 0 4040 level7_crash2
+C 87 0 3960 level7_crash3
+C 88 0 4270 level7_crash4
+C 89 0 2930 level7_crash5
+C 90 0 3720 level7_crash6
+C 91 0 2880 level7_crash7
+C 92 8 25145 level8
+E direction-left 175 193
+E direction-right 203 225
+E direction-right 267 289
+E direction-left 302 324
+E accelerate 424 469
+E direction-left 436 454
+C 93 8 22820 level8_checkpoint1
+E direction-right 15 28
+E direction-left 35 51
+E direction-left 85 97
+E direction-right 105 127
+E brake 163 185
+E accelerate 225 262
+E direction-left 305 324
+E direction-right 329 349
+E accelerate 386 421
+E direction-right 482 500
+R 262
+R 420
+C 94 8 25790 level8_checkpoint2
+E direction-left 38 57
+E direction-right 67 84
+E accelerate 214 263
+E direction-right 245 266
+E direction-left 278 299
+E direction-right 313 328
+E direction-right 480 497
+E brake 546 569
+R 341
+R 507
+C 95 8 20805 level8_checkpoint3
+E accelerate 20 58
+E direction-left 37 56
+E direction-right 64 88
+E direction-left 91 105
+E direction-left 125 141
+E direction-right 288 301
+E accelerate 413 454
+R 179
+C 96 8 22220 level8_checkpoint4
+E brake 57 79
+E accelerate 177 199
+E accelerate 235 318
+E direction-right 235 318
+E direction-left 334 348
+E accelerate 399 438
+R 171
+R 197
+R 205
+R 223
+R 235
+R 373
+C 97 0 3499 level8_crash1
+C 98 0 2880 level8_crash10
+C 99 0 3730 level8_crash2
+C 100 0 4170 level8_crash3
+C 101 0 4510 level8_crash4
+C 102 0 4504 level8_crash5
+C 103 0 4630 level8_crash6
+C 104 0 5040 level8_crash7
+C 105 0 3900 level8_crash8
+C 106 0 3930 level8_crash9
+C 107 9 28618 level9
+E direction-right 409 430
+E direction-left 432 455
+E accelerate 468 504
+E brake 554 584
+E direction-right 576 601
+E direction-left 617 631
+E direction-right 631 655
+E direction-left 657 684
+R 439
+R 590
+C 108 9 14240 level9_checkpoint1
+E direction-left 23 44
+E direction-left 57 78
+E direction-right 89 113
+E accelerate 147 170
+E accelerate 205 228
+E accelerate 243 265
+E direction-left 283 307
+E direction-right 307 331
+R 168
+R 226
+R 265
+C 109 9 13400 level9_checkpoint2
+E direction-left 51 75
+E direction-right 86 109
+E direction-left 123 148
+E direction-right 150 170
+E direction-left 179 198
+E direction-right 202 225
+E direction-right 237 259
+E direction-left 267 291
+E direction-right 295 317
+C 110 9 18350 level9_checkpoint3
+E direction-left 24 47
+E direction-right 55 79
+E direction-right 152 176
+E accelerate 228 253
+E brake 301 329
+E direction-right 324 351
+E direction-right 379 402
+E direction-left 408 438
+R 190
+R 250
+R 358
+C 111 9 41850 level9_checkpoint4
+E direction-left 28 52
+E direction-right 58 82
+E direction-right 141 165
+E direction-left 174 197
+E direction-right 204 229
+E direction-left 232 255
+E direction-right 262 286
+E direction-left 307 323
+R 0
+R 72
+R 323
+R 342
+C 112 9 98550 level9_checkpoint5
+E accelerate 0 52
+E accelerate 79 97
+E direction-right 177 198
+E direction-left 248 275
+E direction-right 288 313
+E direction-right 317 346
+E direction-right 374 397
+E direction-left 399 420
+E direction-left 423 443
+E direction-right 445 475
+E accelerate 504 531
+E accelerate 573 596
+E direction-right 645 668
+E direction-left 677 704
+E accelerate 677 704
+E direction-right 712 736
+E direction-left 746 766
+E direction-right 770 785
+E direction-left 789 804
+E direction-right 806 826
+E accelerate 830 857
+E accelerate 883 908
+E accelerate 955 994
+R 243
+R 383
+R 431
+R 518
+R 611
+R 628
+R 934
+R 1047
+R 1094
+C 113 0 2690 level9_crash1
+C 114 0 3830 level9_crash2
+C 115 0 2800 level9_crash3
+C 116 0 3800 level9_crash4
+C 117 0 3840 level9_crash5
+C 118 0 3400 level9_crash6
+C 119 0 3800 level9_crash7
+C 120 0 3870 level9_crash8
+C 121 0 14863 logo_intro

@@ -1,0 +1,20 @@
+# --- Super Road Blaster Next ---
+# Datos derivados del juego (vídeo/audio con derechos de terceros): no se suben
+gamedata/
+*.sfc
+*.msu
+*.pcm
+*.apk
+*.aab
+
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/.idea/
+android/.kotlin/
+*.iml
+.DS_Store
+Thumbs.db
