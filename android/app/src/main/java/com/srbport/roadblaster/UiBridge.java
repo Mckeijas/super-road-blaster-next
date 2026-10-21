@@ -59,6 +59,7 @@ public final class UiBridge {
                 o.put("charging", bm.isCharging());
             }
             o.put("gameComplete", GameData.isComplete(activity));
+            o.put("scores", GameData.highScores(activity));
             o.put("soundtrackDir", GameData.soundtrackDir(activity).getAbsolutePath());
             JSONArray slots = new JSONArray();
             SimpleDateFormat fmt = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());

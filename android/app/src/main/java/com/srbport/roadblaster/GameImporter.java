@@ -210,8 +210,11 @@ public final class GameImporter {
         byte[] rom = GameData.readFile(GameData.romFile(ctx));
         synchronized (GameActivity.sessionLock()) {
             GameActivity.stopActiveSessionLocked();
+            // own scratch save folder: the automatic run must not touch the player's high scores
+            File genSave = new File(ctx.getCacheDir(), "scene_gen");
+            genSave.mkdirs();
             if (!NativeBridge.nativeGenBegin(rom, chapters, GameData.gameDir(ctx).getAbsolutePath(),
-                    GameData.saveDir(ctx).getAbsolutePath(), out.getAbsolutePath())) {
+                    genSave.getAbsolutePath(), out.getAbsolutePath())) {
                 throw new IOException("No se pudo arrancar el juego importado.");
             }
             try {

@@ -44,6 +44,63 @@ public final class GameData {
         }
     }
 
+    // --- high scores ----------------------------------------------------------------------
+    /**
+     * Hall of fame from the game's battery RAM (SuperRoadBlaster.srm), as the game writes it
+     * (src/core/persistency.65816): "7 13" header, then one slot per Score object
+     * ("8 13", object id, size, object data). The last 7 bytes of each Score are
+     * score (16-bit, shown x1000), name (4 ASCII bytes) and lives.
+     * Returns [{name, score}] best first, or the game's default table if none was saved yet.
+     */
+    public static org.json.JSONArray highScores(Context ctx) {
+        java.util.List<long[]> list = new java.util.ArrayList<>();
+        java.util.List<String> names = new java.util.ArrayList<>();
+        boolean saved = false;
+        try {
+            byte[] d = readFile(new File(saveDir(ctx), "SuperRoadBlaster.srm"));
+            int len = (d[2] & 0xff) | ((d[3] & 0xff) << 8);
+            if ((d[0] & 0xff) == 0x37 && (d[1] & 0xff) == 0x13 && len > 8 && len <= d.length
+                    && (d[len - 2] & 0xff) == 0x39 && (d[len - 1] & 0xff) == 0x13) {
+                int p = 6;
+                while (p + 4 <= len - 2 && (d[p] & 0xff) == 0x38 && (d[p + 1] & 0xff) == 0x13) {
+                    int size = d[p + 3] & 0xff;
+                    int data = p + 4;
+                    if (size >= 7 && data + size <= len - 2) {
+                        int e = data + size;
+                        long score = (d[e - 7] & 0xff) | ((d[e - 6] & 0xff) << 8);
+                        StringBuilder n = new StringBuilder();
+                        for (int i = e - 5; i < e - 1; i++) {
+                            int ch = d[i] & 0xff;
+                            if (ch == 0) break;
+                            if (ch >= 32 && ch < 127) n.append((char) ch);
+                        }
+                        list.add(new long[]{score, names.size()});
+                        names.add(n.toString().trim());
+                    }
+                    p = data + size;
+                }
+                saved = !list.isEmpty();
+            }
+        } catch (Exception ignored) {
+        }
+        if (!saved) {               // the game's own defaults: "D4S" 50, 40, 30, 20, 10
+            for (int i = 0; i < 5; i++) { list.add(new long[]{50 - i * 10, names.size()}); names.add("D4S"); }
+        }
+        list.sort((x, y) -> Long.compare(y[0], x[0]));
+        org.json.JSONArray out = new org.json.JSONArray();
+        try {
+            for (long[] e : list) {
+                org.json.JSONObject o = new org.json.JSONObject();
+                o.put("name", names.get((int) e[1]));
+                o.put("score", e[0] * 1000);
+                o.put("defaults", !saved);
+                out.put(o);
+            }
+        } catch (Exception ignored) {
+        }
+        return out;
+    }
+
     // --- imported game ------------------------------------------------------------------
     public static File gameDir(Context ctx) {
         File d = new File(ctx.getFilesDir(), "game");

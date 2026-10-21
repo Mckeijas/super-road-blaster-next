@@ -748,7 +748,14 @@ bool saveState(std::vector<uint8_t> &out) {
 
 bool loadState(const std::vector<uint8_t> &in) {
     if (!g || !g->loaded) return false;
+    // States carry a copy of the battery RAM. The high-score table must not travel back in
+    // time with a scene state, so the current SRAM is kept across the load.
+    std::vector<uint8_t> sram;
+    uint8_t *sp = (uint8_t *)retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    size_t sz = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    if (sp && sz) sram.assign(sp, sp + sz);
     bool ok = retro_unserialize(in.data(), in.size());
+    if (ok && sp && sram.size() == sz) memcpy(sp, sram.data(), sz);
     g->lastTrack = -2; // force a chapter change notification
     if (g->sonic) { sonicFlushStream(g->sonic); }
     return ok;

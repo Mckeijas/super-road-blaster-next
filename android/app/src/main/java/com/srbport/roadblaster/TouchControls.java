@@ -11,7 +11,9 @@ import android.view.View;
 
 /**
  * Floating touch buttons drawn over the game, very transparent so they hide little of the
- * picture: d-pad (left), A = accelerate and B = brake (right), START and pause (top).
+ * picture. Same layout as the AYN Odin 2 Portal: steering ◀ ▶ on the left; on the right
+ * "B" (right position) accelerates and "A" (bottom position) brakes; START at the bottom
+ * centre and pause at the top right.
  *
  * Modes: "on" always visible, "off" never, "auto" appear when the screen is touched and
  * hide again as soon as a physical button is used.
@@ -38,7 +40,8 @@ public final class TouchControls extends View {
     private boolean startDown, pauseDown;
 
     // layout (computed in onSizeChanged)
-    private float padX, padY, padR, aX, aY, bX, bY, btnR;
+    private float leftX, rightX, steerY, steerR;   // steering buttons (left / right only)
+    private float accX, accY, brkX, brkY, btnR;     // B = accelerate (SNES A), A = brake (SNES B)
     private final RectF startRect = new RectF(), pauseRect = new RectF();
 
     public TouchControls(Context ctx, Listener l) {
@@ -86,14 +89,16 @@ public final class TouchControls extends View {
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         float u = Math.min(w, h);
-        padR = u * 0.17f;
-        padX = padR + u * 0.07f;
-        padY = h - padR - u * 0.08f;
+        steerR = u * 0.095f;
+        leftX = steerR + u * 0.06f;
+        rightX = leftX + steerR * 2.5f;
+        steerY = h - steerR - u * 0.10f;
         btnR = u * 0.085f;
-        bX = w - u * 0.32f;               // B (brake): bottom
-        bY = h - btnR - u * 0.06f;
-        aX = w - btnR - u * 0.05f;        // A (accelerate): right, a bit higher
-        aY = bY - btnR * 1.45f;
+        float cx = w - u * 0.25f, cy = h - u * 0.25f, d = btnR * 1.3f;   // diamond like the Odin
+        accX = cx + d;                     // "B": right position
+        accY = cy;
+        brkX = cx;                         // "A": bottom position
+        brkY = cy + d;
         float pw = u * 0.13f, ph = u * 0.065f;
         startRect.set(w / 2f - pw / 2f, h - ph - u * 0.03f, w / 2f + pw / 2f, h - u * 0.03f);
         float ps = u * 0.09f;
@@ -156,17 +161,12 @@ public final class TouchControls extends View {
 
     private int buttonsAt(float x, float y) {
         int m = 0;
-        float dx = x - padX, dy = y - padY;
-        float d = (float) Math.hypot(dx, dy);
-        if (d < padR * 1.35f && d > padR * 0.18f) {
-            double ang = Math.toDegrees(Math.atan2(dy, dx)); // 0 = right, 90 = down
-            if (ang > -67.5 && ang < 67.5) m |= NativeBridge.BTN_RIGHT;
-            if (ang > 112.5 || ang < -112.5) m |= NativeBridge.BTN_LEFT;
-            if (ang > 22.5 && ang < 157.5) m |= NativeBridge.BTN_DOWN;
-            if (ang < -22.5 && ang > -157.5) m |= NativeBridge.BTN_UP;
+        // steering: a generous zone around both buttons, split down the middle
+        if (Math.abs(y - steerY) < steerR * 1.6f && x < rightX + steerR * 1.5f) {
+            m |= x < (leftX + rightX) / 2f ? NativeBridge.BTN_LEFT : NativeBridge.BTN_RIGHT;
         }
-        if (Math.hypot(x - aX, y - aY) < btnR * 1.25f) m |= NativeBridge.BTN_A;
-        if (Math.hypot(x - bX, y - bY) < btnR * 1.25f) m |= NativeBridge.BTN_B;
+        if (Math.hypot(x - accX, y - accY) < btnR * 1.25f) m |= NativeBridge.BTN_A;
+        if (Math.hypot(x - brkX, y - brkY) < btnR * 1.25f) m |= NativeBridge.BTN_B;
         return m;
     }
 
@@ -180,17 +180,15 @@ public final class TouchControls extends View {
         if (!shown) return;
         drawPause(c);
         if (movie) return;
-        // d-pad
-        boolean any = (mask & (NativeBridge.BTN_UP | NativeBridge.BTN_DOWN | NativeBridge.BTN_LEFT | NativeBridge.BTN_RIGHT)) != 0;
-        circle(c, padX, padY, padR, false, any ? 0.35f : 0f);
-        float arm = padR * 0.62f;
-        arrow(c, padX, padY - arm, 0, (mask & NativeBridge.BTN_UP) != 0);
-        arrow(c, padX, padY + arm, 180, (mask & NativeBridge.BTN_DOWN) != 0);
-        arrow(c, padX - arm, padY, 270, (mask & NativeBridge.BTN_LEFT) != 0);
-        arrow(c, padX + arm, padY, 90, (mask & NativeBridge.BTN_RIGHT) != 0);
-        // A / B
-        button(c, aX, aY, "A", "ACELERAR", (mask & NativeBridge.BTN_A) != 0);
-        button(c, bX, bY, "B", "FRENAR", (mask & NativeBridge.BTN_B) != 0);
+        // steering: left / right only
+        boolean l = (mask & NativeBridge.BTN_LEFT) != 0, r = (mask & NativeBridge.BTN_RIGHT) != 0;
+        circle(c, leftX, steerY, steerR, l, 0f);
+        arrow(c, leftX, steerY, 270, l);
+        circle(c, rightX, steerY, steerR, r, 0f);
+        arrow(c, rightX, steerY, 90, r);
+        // Odin 2 Portal labels: B (right) accelerates, A (bottom) brakes
+        button(c, accX, accY, "B", (mask & NativeBridge.BTN_A) != 0);
+        button(c, brkX, brkY, "A", (mask & NativeBridge.BTN_B) != 0);
         // START
         pill(c, startRect, "START", startDown);
     }
@@ -205,7 +203,7 @@ public final class TouchControls extends View {
     }
 
     private void arrow(Canvas c, float x, float y, float rot, boolean on) {
-        float s = padR * 0.22f;
+        float s = steerR * 0.42f;
         c.save();
         c.rotate(rot, x, y);
         android.graphics.Path p = new android.graphics.Path();
@@ -218,14 +216,11 @@ public final class TouchControls extends View {
         c.restore();
     }
 
-    private void button(Canvas c, float x, float y, String label, String caption, boolean on) {
+    private void button(Canvas c, float x, float y, String label, boolean on) {
         circle(c, x, y, btnR, on, 0f);
         text.setColor(white(on ? 1f : Math.min(1f, alpha * 3.2f)));
         text.setTextSize(btnR * 0.9f);
         c.drawText(label, x, y + btnR * 0.32f, text);
-        text.setTextSize(btnR * 0.24f);
-        text.setColor(white(Math.min(1f, alpha * 2.4f)));
-        c.drawText(caption, x, y + btnR + btnR * 0.38f, text);
     }
 
     private void pill(Canvas c, RectF r, String label, boolean on) {

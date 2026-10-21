@@ -23,7 +23,8 @@
     const get = () => { try { return Object.assign({}, defaults, JSON.parse(localStorage.getItem('srb') || '{}')); } catch (e) { return defaults; } };
     return {
       getState: () => JSON.stringify({ settings: get(), chapters, hasResume: true, resumeChapter: '38', gameComplete: !/noimport/.test(location.hash),
-        scenesReady: true, thumbBase: '../th/', import: window.SRB_MOCK_IMPORT || { phase: 'idle', percent: 0, busy: false },
+        scenesReady: true, thumbBase: '../th/',
+        scores: [{ name: 'MCK', score: 724000 }, { name: 'D4S', score: 50000 }, { name: 'D4S', score: 40000 }, { name: 'D4S', score: 30000 }, { name: 'D4S', score: 20000 }], import: window.SRB_MOCK_IMPORT || { phase: 'idle', percent: 0, busy: false },
         battery: 76, charging: false,
         soundtrackDir: '/storage/emulated/0/Android/data/com.srbport.roadblaster/files/banda_sonora',
         slots: [{ slot: 1, exists: true, date: '20/10/2026 21:04', chapter: '37' }, { slot: 2, exists: true, date: '20/10/2026 22:10', chapter: '94' }, { slot: 3, exists: false }],
@@ -107,6 +108,7 @@
     down: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>',
     up: '<path d="M12 21V9M7 14l5-5 5 5M4 3h16"/>',
     home: '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/>',
     zip: '<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M10 4h2M10 7h2M10 10h2M10 13h2"/><rect x="9.5" y="15" width="3" height="4" rx="1"/>',
   };
   const svg = (k) => '<svg viewBox="0 0 24 24">' + (ICON[k] || '') + '</svg>';
@@ -226,6 +228,7 @@
       if (ready && S.hasResume) add({ id: 'resume', ico: 'play', label: 'Continuar', sub: 'Donde lo dejaste', act: () => launch('resume'), hero: 'resume' });
       if (ready) add({ id: 'new', ico: 'spark', label: 'Nueva partida', sub: 'Desde el encendido de la consola', act: () => launch('new'), hero: 'new' });
       if (ready) add({ id: 'director', ico: 'clap', label: "Director's Mode", panel: 'director' });
+      if (ready) add({ id: 'records', ico: 'trophy', label: 'Récords', sub: 'Las mejores puntuaciones', panel: 'records' });
       add({ id: 'graphics', ico: 'screen', label: 'Gráficos', panel: 'graphics' });
       add({ id: 'audio', ico: 'wave', label: 'Audio', panel: 'audio' });
       add({ id: 'controls', ico: 'pad', label: 'Controles', panel: 'controls' });
@@ -306,14 +309,15 @@
     const cur = $('nav.menu .cursor');
     const it = items[ui.sec];
     if (cur && it) {
-      const place = () => {
-        cur.style.transform = 'translateY(' + it.offsetTop + 'px)';
-        cur.style.height = it.offsetHeight + 'px';
-      };
-      requestAnimationFrame(place);
-      clearTimeout(cur._t);
-      cur._t = setTimeout(place, 280); // after the subtitle finished expanding
-      items.forEach((x) => { x.ontransitionend = (x === it) ? place : null; });
+      // One move per change, straight to the final size: the subtitle opens instantly (only
+      // its opacity fades), so the cursor never has to correct itself half way (no flicker).
+      const y = it.offsetTop, hgt = it.offsetHeight;
+      if (cur._y !== y || cur._h !== hgt) {
+        cur.style.transform = 'translateY(' + y + 'px)';
+        cur.style.height = hgt + 'px';
+        cur._y = y;
+        cur._h = hgt;
+      }
       cur.classList.toggle('dim', ui.zone !== 'menu');
       it.scrollIntoView({ block: 'nearest' });
     }
@@ -383,6 +387,7 @@
       case 'graphics': return panelGraphics();
       case 'audio': return panelAudio();
       case 'controls': return panelControls();
+      case 'records': return panelRecords();
       case 'scenes': return panelScenes();
       case 'slots': return panelSlots(sec.slotMode);
       case 'credits': return panelCredits();
@@ -421,6 +426,22 @@
       'De principio a fin sin tocar nada: QTE automático, sin marcador y sin choques. Unos 19 minutos de anime.',
       '<span class="chip hot">≈ 19 min</span><span class="chip">Sin manos</span><span class="chip">' + (setting('audio') === 'enhanced' ? 'MSU-1 Enhanced' : 'Audio original') + '</span>') + '</div>';
     return '<div class="hero">' + heroShot(2, sec.label, sec.label, '') + '</div>';
+  }
+
+  // Hall of fame, read from the game's own save (the same table as the in-game screen)
+  function panelRecords() {
+    const list = (S.scores || []).slice(0, 5);
+    const fmt = (n) => String(n).padStart(7, '0');
+    const isDefault = list.length && list[0].defaults;
+    const rows = list.map((e, i) => '<div class="rec' + (i === 0 ? ' top' : '') + '" style="animation-delay:' + (0.06 * i) + 's">' +
+      '<span class="pos">' + (i + 1) + '</span><span class="nm">' + esc(e.name || '???') + '</span>' +
+      '<span class="dots"></span><span class="sc">' + fmt(e.score) + '</span></div>').join('');
+    const t = hasThumb(112) ? thumb(112) : thumb(3);
+    return '<div class="section-title">Récords</div><div class="records">' +
+      (t ? '<img class="recbg" src="' + t + '">' : '') +
+      '<div class="rechead">HALL OF FAME</div>' + rows +
+      '<p class="recnote">' + (isDefault ? 'Aún no hay récords: la tabla trae las puntuaciones iniciales del juego. Termina una partida para entrar en ella.'
+        : 'Al acabar una partida con buena puntuación el juego te pide tus iniciales. Las puntuaciones se guardan solas.') + '</p></div>';
   }
 
   function panelImport() {
