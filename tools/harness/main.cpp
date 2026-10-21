@@ -1,8 +1,11 @@
 // Headless desktop harness for the SRB port core.
 //   srb_harness shots    <rom> <chapters.txt> <outdir> <frames> <every> [qte=0|1|2] [movie=0|1]
 //   srb_harness autoplay <rom> <chapters.txt> <outdir> <maxframes>
+//   srb_harness gen      <rom> <chapters.txt> <outdir> [expected=43]   (scene selector data, as on the phone)
 //   srb_harness state    <rom> <chapters.txt> <state> <outdir> <frames> <every> [qte] [movie] [speed]
 #include "srb_core.h"
+#include "scene_gen.h"
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -52,6 +55,17 @@ static bool boot(const char *rom, const char *chapters) {
     auto t = readFile(chapters);
     c.chaptersTxt.assign(t.begin(), t.end());
     c.saveDir = "/tmp";
+    if (const char *gp = getenv("SRB_GAINS")) {      // enhanced_gains.json
+        auto j = readFile(gp);
+        std::string js(j.begin(), j.end());
+        size_t p = js.find('[', js.find("gainDb"));
+        while (p != std::string::npos && p < js.size() && js[p] != ']') {
+            char *end; float v = strtof(js.c_str() + p + 1, &end);
+            if (end == js.c_str() + p + 1) break;
+            c.enhancedGainDb.push_back(v);
+            p = end - js.c_str();
+        }
+    }
     return srb::init(c);
 }
 
@@ -96,6 +110,21 @@ int main(int argc, char **argv) {
         }
         wav.close();
         srb::shutdown();
+        return 0;
+    }
+
+    if (cmd == "gen") {
+        auto t0 = std::chrono::steady_clock::now();
+        std::string rom = argv[2], out = argv[4];
+        int expected = argc > 5 ? atoi(argv[5]) : 43;
+        auto t = readFile(argv[3]);
+        std::string dir = rom.substr(0, rom.find_last_of('/'));
+        if (!srb::genBegin(readFile(rom), std::string(t.begin(), t.end()), dir, "/tmp", out)) return 2;
+        int r;
+        while ((r = srb::genRun(3000, 70000, expected)) >= 0) { printf("frame %d scenes %d\n", srb::genFrame(), r); fflush(stdout); }
+        printf("done at frame %d in %.1f s\n", srb::genFrame(),
+               std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+        srb::genEnd();
         return 0;
     }
 

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdlib>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -216,6 +217,130 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// MSU-1 Enhanced, processed live on top of the original .pcm track: loudness gain per
+// track, the same gentle EQ as the old offline remaster and a peak limiter. Nothing is
+// stored: the imported game files are the only audio data on the device.
+class EnhancedStream : public Stream {
+public:
+    EnhancedStream(Stream *raw, float gainDb) : raw_(raw) {
+        gain_ = std::pow(10.0f, gainDb / 20.0f);
+        const float fs = 44100.0f;
+        setPeak(eq_[0], 70.0f, 0.8f, 1.5f, fs);
+        setPeak(eq_[1], 3200.0f, 1.2f, 1.0f, fs);
+        setPeak(eq_[2], 9500.0f, 1.0f, 1.2f, fs);
+        release_ = 1.0f - std::exp(-1.0f / (0.040f * fs));
+        size_ = raw_->size();
+    }
+    ~EnhancedStream() override { if (raw_) raw_->closeStream(); }
+
+    int get_char() override {
+        uint8_t c;
+        return read(&c, 1) == 1 ? c : EOF;
+    }
+    char *gets(char *, size_t) override { return nullptr; }
+    size_t read(void *dst, size_t len) override {
+        uint8_t *d = (uint8_t *)dst;
+        size_t done = 0;
+        while (done < len && pos_ < size_) {
+            if (pos_ < 8) {                               // "MSU1" + loop point: untouched
+                raw_->revert(0, (int32)pos_);
+                uint8_t c;
+                if (raw_->read(&c, 1) != 1) break;
+                d[done++] = c;
+                pos_++;
+                continue;
+            }
+            int64_t block = (int64_t)(pos_ - 8) / kBlockBytes;
+            if (block != cached_ && !process(block)) break;
+            size_t off = (size_t)((int64_t)(pos_ - 8) - block * kBlockBytes);
+            size_t n = std::min(len - done, cachedBytes_ - off);
+            if (n == 0) break;
+            memcpy(d + done, (uint8_t *)buf_ + off, n);
+            done += n;
+            pos_ += n;
+        }
+        return done;
+    }
+    size_t write(void *, size_t) override { return 0; }
+    size_t pos() override { return pos_; }
+    size_t size() override { return size_; }
+    int revert(uint8 origin, int32 offset) override {
+        size_t p = pos_from_origin_offset(origin, offset);
+        if (p > size_) return -1;
+        pos_ = p;
+        return 0;
+    }
+    void closeStream() override { delete this; }
+
+private:
+    static constexpr int kBlockFrames = 4096;
+    static constexpr int64_t kBlockBytes = kBlockFrames * 4;
+    struct Biquad { float b0, b1, b2, a1, a2; float z[2][2]; };
+
+    static void setPeak(Biquad &q, float f, float Q, float gainDb, float fs) {
+        float A = std::pow(10.0f, gainDb / 40.0f), w0 = 2.0f * 3.14159265f * f / fs;
+        float alpha = std::sin(w0) / (2.0f * Q), c = std::cos(w0);
+        float a0 = 1.0f + alpha / A;
+        q.b0 = (1.0f + alpha * A) / a0; q.b1 = -2.0f * c / a0; q.b2 = (1.0f - alpha * A) / a0;
+        q.a1 = -2.0f * c / a0; q.a2 = (1.0f - alpha / A) / a0;
+        memset(q.z, 0, sizeof q.z);
+    }
+    void resetState() {
+        for (Biquad &q : eq_) memset(q.z, 0, sizeof q.z);
+        env_ = 1.0f;
+    }
+    bool readBlock(int64_t block, int16_t *out, size_t *bytes) {
+        if (raw_->revert(0, (int32)(8 + block * kBlockBytes)) != 0) return false;
+        *bytes = raw_->read(out, kBlockBytes) & ~(size_t)3;
+        return *bytes > 0;
+    }
+    void filter(int16_t *smp, size_t frames) {
+        const float limit = 0.891f * 32767.0f;            // -1 dBFS
+        for (size_t i = 0; i < frames; ++i) {
+            float v[2];
+            for (int ch = 0; ch < 2; ++ch) {
+                float x = smp[i * 2 + ch] * gain_;
+                for (Biquad &q : eq_) {                     // transposed direct form II
+                    float y = q.b0 * x + q.z[ch][0];
+                    q.z[ch][0] = q.b1 * x - q.a1 * y + q.z[ch][1];
+                    q.z[ch][1] = q.b2 * x - q.a2 * y;
+                    x = y;
+                }
+                v[ch] = x;
+            }
+            float peak = std::max(std::fabs(v[0]), std::fabs(v[1]));
+            if (peak * env_ > limit) env_ = limit / peak;       // instant attack
+            else env_ += (1.0f - env_) * release_;            // 40 ms release
+            for (int ch = 0; ch < 2; ++ch) {
+                float y = v[ch] * env_;
+                smp[i * 2 + ch] = (int16_t)std::max(-32768.0f, std::min(32767.0f, y));
+            }
+        }
+    }
+    bool process(int64_t block) {
+        if (block != cached_ + 1) {                        // seek: settle filters on the block before
+            resetState();
+            size_t b = 0;
+            if (block > 0 && readBlock(block - 1, buf_, &b)) filter(buf_, b / 4);
+        }
+        size_t bytes = 0;
+        if (!readBlock(block, buf_, &bytes)) return false;
+        filter(buf_, bytes / 4);
+        cached_ = block;
+        cachedBytes_ = bytes;
+        return true;
+    }
+
+    Stream *raw_;
+    float gain_ = 1.0f, env_ = 1.0f, release_ = 0.001f;
+    Biquad eq_[3];
+    size_t size_ = 0, pos_ = 0;
+    int16_t buf_[kBlockFrames * 2];
+    int64_t cached_ = -2;
+    size_t cachedBytes_ = 0;
+};
+
+// ---------------------------------------------------------------------------
 struct State {
     Config cfg;
     std::vector<Chapter> chapters;
@@ -384,13 +509,15 @@ STREAM openGameFile(const char *ext) {
             if (FlacStream *s = FlacStream::open(fd, off, len, 0)) return s;
         }
     }
-    // 2) MSU-1 Enhanced (remastered FLAC shipped with the app)
-    if (g->enhancedAudio.load() && findFile("enhanced/" + base + ".flac", &fd, &off, &len)) {
-        if (FlacStream *s = FlacStream::open(fd, off, len, 0)) return s;
-        logf("[srb] bad flac %s\n", base.c_str());
+    // 2) original track, optionally through the live MSU-1 Enhanced processing
+    if (!findFile(name, &fd, &off, &len)) return nullptr;
+    Stream *raw = new FdStream(fd, off, len, true);
+    if (g->enhancedAudio.load()) {
+        int track = atoi(base.substr(base.find_last_of('-') + 1).c_str());
+        float gain = track >= 0 && track < (int)g->cfg.enhancedGainDb.size() ? g->cfg.enhancedGainDb[track] : 0.0f;
+        return new EnhancedStream(raw, gain);
     }
-    // 3) original track
-    return findFile(name, &fd, &off, &len) ? new FdStream(fd, off, len, true) : nullptr;
+    return raw;
 }
 
 uint16_t buttonFor(const std::string &type) {

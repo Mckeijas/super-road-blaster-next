@@ -13,9 +13,12 @@ import java.nio.charset.StandardCharsets;
 
 /** Access to the game files packed in the APK and to the user's save data. */
 public final class GameData {
-    public static final String ROM = "game/SuperRoadBlaster.sfc";
+    // Chapter scripts (from the game's MIT-licensed source) travel in the APK. The game
+    // itself (ROM, .msu, .pcm) is imported by the user from a .zip (see GameImporter).
     public static final String CHAPTERS_TXT = "game/chapters.txt";
     public static final String CHAPTERS_JSON = "game/chapters.json";
+    public static final String GAINS_JSON = "game/enhanced_gains.json";
+    public static final int TRACKS = 122;
 
     private GameData() {}
 
@@ -41,14 +44,47 @@ public final class GameData {
         }
     }
 
-    /** True when the ROM and the MSU-1 data were packed into this APK. */
-    public static boolean isComplete(AssetManager am) {
-        return assetExists(am, ROM) && assetExists(am, "game/SuperRoadBlaster.msu")
-                && assetExists(am, CHAPTERS_TXT);
+    // --- imported game ------------------------------------------------------------------
+    public static File gameDir(Context ctx) {
+        File d = new File(ctx.getFilesDir(), "game");
+        if (!d.exists()) d.mkdirs();
+        return d;
     }
 
-    public static String sceneStatePath(int chapter) {
-        return String.format(java.util.Locale.ROOT, "game/states/%03d.state", chapter);
+    public static File romFile(Context ctx) { return new File(gameDir(ctx), "SuperRoadBlaster.sfc"); }
+
+    /** True when the game has been imported (ROM, .msu and every .pcm track). */
+    public static boolean isComplete(Context ctx) {
+        File d = gameDir(ctx);
+        if (!new File(d, "SuperRoadBlaster.sfc").isFile() || !new File(d, "SuperRoadBlaster.msu").isFile()) return false;
+        for (int i = 0; i < TRACKS; i++) if (!new File(d, "SuperRoadBlaster-" + i + ".pcm").isFile()) return false;
+        return true;
+    }
+
+    /** Scene selector data generated on the device after importing: states/ and thumbs/. */
+    public static File scenesDir(Context ctx) {
+        File d = new File(ctx.getFilesDir(), "scenes");
+        if (!d.exists()) d.mkdirs();
+        return d;
+    }
+
+    public static File sceneStateFile(Context ctx, int chapter) {
+        return new File(scenesDir(ctx), String.format(java.util.Locale.ROOT, "states/%03d.state", chapter));
+    }
+
+    public static File sceneThumbFile(Context ctx, int chapter) {
+        return new File(scenesDir(ctx), String.format(java.util.Locale.ROOT, "thumbs/%03d.png", chapter));
+    }
+
+    /** MSU-1 Enhanced loudness gain per track, in dB (numbers only, shipped with the app). */
+    public static float[] enhancedGains(AssetManager am) {
+        float[] g = new float[TRACKS];
+        try {
+            org.json.JSONArray a = new org.json.JSONObject(readAssetText(am, GAINS_JSON)).getJSONArray("gainDb");
+            for (int i = 0; i < g.length && i < a.length(); i++) g[i] = (float) a.optDouble(i, 0);
+        } catch (Exception ignored) {
+        }
+        return g;
     }
 
     // --- user files ---------------------------------------------------------------

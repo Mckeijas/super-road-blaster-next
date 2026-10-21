@@ -45,6 +45,7 @@ struct Config {
     std::string chaptersTxt;      // contents of chapters.txt (see tools/parse_events.py)
     std::string saveDir;          // SRAM (high scores) is stored here
     std::string overrideDir;      // optional: alternative soundtrack .pcm files
+    std::vector<float> enhancedGainDb; // MSU-1 Enhanced: loudness gain per track (dB)
     FileOpener opener = nullptr;
 };
 
@@ -71,7 +72,7 @@ void setInfiniteLives(bool on);
 void setSpeed(float speed);       // 0.2 .. 2.0 (slow motion / fast forward, pitch preserved)
 void setMovieMode(bool on);       // full auto + HUD hidden
 void setHudVisible(bool on);
-void setEnhancedAudio(bool on); // MSU-1 Enhanced tracks (applies from the next track)
+void setEnhancedAudio(bool on); // MSU-1 Enhanced processing (applies from the next track)
 void setVolumes(float msu, float sfx); // reserved for the mixer (0..2)
 
 // Scene select / states --------------------------------------------------------

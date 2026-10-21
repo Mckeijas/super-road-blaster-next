@@ -71,11 +71,6 @@ android {
         }
     }
 
-    androidResources {
-        // Stored uncompressed so the game can read them directly from the APK.
-        noCompress += ['msu', 'pcm', 'flac', 'sfc']
-    }
-
     packagingOptions {
         jniLibs {
             useLegacyPackaging false
@@ -84,32 +79,7 @@ android {
 }
 
 // --- Game data -----------------------------------------------------------------------
-// The ROM / MSU-1 files are YOUR dump and are never stored in the source tree:
-// they are copied into the APK at build time from srbGameDir.
-def srbGameDir = rootProject.file(project.findProperty('srbGameDir') ?: '../..')
-def srbGameDataDir = rootProject.file(project.findProperty('srbGameDataDir') ?: '../gamedata')
-def srbAssetsOut = layout.buildDirectory.dir('generated/srbassets').get().asFile
+// Since 1.5.0 the APK carries no game data: the player imports their own .zip of Super
+// Road Blaster from the launcher, and the scene states, thumbnails and Enhanced audio are
+// produced on the device (see GameImporter.java and srb/scene_gen.cpp).
 
-def prepareGameAssets = tasks.register('prepareGameAssets', Sync) {
-    description = 'Copies the Super Road Blaster game files into the APK assets.'
-    into(new File(srbAssetsOut, 'game'))
-    // explicit file list: the game folder may also contain this project (and its build outputs)
-    from(files(['SuperRoadBlaster.sfc', 'SuperRoadBlaster.msu'].collect { new File(srbGameDir, it) } +
-               (0..121).collect { new File(srbGameDir, "SuperRoadBlaster-${it}.pcm") }))
-    from(srbGameDataDir) {
-        include 'states/*.state', 'enhanced/*.flac'
-    }
-    doFirst {
-        if (!new File(srbGameDir, 'SuperRoadBlaster.msu').exists()) {
-            throw new GradleException("No encuentro SuperRoadBlaster.msu en '${srbGameDir}'. " +
-                    "Revisa srbGameDir en gradle.properties.")
-        }
-        if (!new File(srbGameDataDir, 'states').exists()) {
-            throw new GradleException("No encuentro la carpeta gamedata/states en '${srbGameDataDir}'.")
-        }
-    }
-}
-
-android.sourceSets.main.assets.srcDir(srbAssetsOut)
-
-tasks.named('preBuild') { dependsOn prepareGameAssets }

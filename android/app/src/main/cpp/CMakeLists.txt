@@ -21,7 +21,8 @@ set(SNES9X_SOURCES
 add_library(srbengine STATIC
     ${SNES9X_SOURCES}
     sonic/sonic.c
-    srb/srb_core.cpp)
+    srb/srb_core.cpp
+    srb/scene_gen.cpp)
 target_include_directories(srbengine PUBLIC
     ${S9X} ${S9X}/apu ${S9X}/apu/bapu ${S9X}/libretro ${S9X}/libretro/libretro-common/include
     sonic srb third_party)
@@ -36,7 +37,11 @@ if(ANDROID)
     target_link_libraries(srbport srbengine android log)
 else()
     # Desktop test harness (headless): screenshots, autoplay, state generation.
-    add_executable(srb_harness ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../harness/main.cpp)
-    target_include_directories(srb_harness PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../harness)
+    set(HARNESS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../tools/harness)
+    if(NOT EXISTS ${HARNESS_DIR}/main.cpp)
+        set(HARNESS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../harness)
+    endif()
+    add_executable(srb_harness ${HARNESS_DIR}/main.cpp)
+    target_include_directories(srb_harness PRIVATE ${HARNESS_DIR})
     target_link_libraries(srb_harness srbengine z)
 endif()

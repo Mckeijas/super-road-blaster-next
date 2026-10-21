@@ -51,6 +51,18 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
     private static final Object SESSION_LOCK = new Object();
     private static EmuThread activeEmu;
 
+    /** Lock for anything that uses the native core (the game or the scene generator). */
+    static Object sessionLock() { return SESSION_LOCK; }
+
+    /** Stops a game session that is still alive. Call while holding sessionLock(). */
+    static void stopActiveSessionLocked() {
+        if (activeEmu != null) {
+            activeEmu.shutdown();
+            activeEmu = null;
+            NativeBridge.nativeShutdown();
+        }
+    }
+
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -93,7 +105,11 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
 
     private void boot() {
         try {
-            byte[] rom = GameData.readAsset(getAssets(), GameData.ROM);
+            if (!GameData.isComplete(this) || GameImporter.isBusy()) {
+                fail("Primero carga el juego desde el menú principal (Cargar juego .zip).");
+                return;
+            }
+            byte[] rom = GameData.readFile(GameData.romFile(this));
             String chapters = GameData.readAssetText(getAssets(), GameData.CHAPTERS_TXT);
             parseLevelChapters(chapters);
             String override = "custom".equals(settings.get("audio"))
@@ -106,7 +122,8 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
                 }
                 if (isFinishing() || isDestroyed()) return;
                 if (!NativeBridge.nativeInit(getAssets(), rom, chapters,
-                        GameData.saveDir(this).getAbsolutePath(), override)) {
+                        GameData.saveDir(this).getAbsolutePath(), override,
+                        GameData.gameDir(this).getAbsolutePath(), GameData.enhancedGains(getAssets()))) {
                     fail("No se pudo iniciar el juego.");
                     return;
                 }
@@ -121,9 +138,9 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
                 File f = GameData.resumeFile(this);
                 if (f.exists()) state = GameData.readFile(f);
             } else if ("scene".equals(mode) && arg != null) {
-                state = GameData.readAsset(getAssets(), GameData.sceneStatePath(Integer.parseInt(arg)));
+                state = GameData.readFile(GameData.sceneStateFile(this, Integer.parseInt(arg)));
             } else if ("movie".equals(mode)) {
-                state = GameData.readAsset(getAssets(), GameData.sceneStatePath(CHAPTER_INTRO));
+                state = GameData.readFile(GameData.sceneStateFile(this, CHAPTER_INTRO));
             } else if ("slot".equals(mode) && arg != null) {
                 File f = GameData.slotFile(this, Integer.parseInt(arg));
                 if (f.exists()) state = GameData.readFile(f);
@@ -354,7 +371,7 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
                 int ch = parse(arg, -1);
                 emu.post(() -> {
                     try {
-                        NativeBridge.nativeLoadState(GameData.readAsset(getAssets(), GameData.sceneStatePath(ch)));
+                        NativeBridge.nativeLoadState(GameData.readFile(GameData.sceneStateFile(this, ch)));
                         runOnUiThread(this::closeMenu);
                     } catch (Exception ex) {
                         toast("Escena no disponible");
@@ -367,7 +384,7 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
                     int ch = NativeBridge.nativeCurrentChapter();
                     try {
                         if (ch < 0) throw new IllegalStateException();
-                        NativeBridge.nativeLoadState(GameData.readAsset(getAssets(), GameData.sceneStatePath(ch)));
+                        NativeBridge.nativeLoadState(GameData.readFile(GameData.sceneStateFile(this, ch)));
                         runOnUiThread(this::closeMenu);
                     } catch (Exception ex) {
                         toast("No hay punto de inicio para esta escena");

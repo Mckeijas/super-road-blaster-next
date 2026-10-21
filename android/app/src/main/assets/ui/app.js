@@ -19,9 +19,11 @@
     const x = new XMLHttpRequest();
     x.open('GET', '../game/chapters.json', false);
     try { x.send(); chapters = JSON.parse(x.responseText); } catch (e) { chapters = []; }
+    chapters.forEach((c) => { if (c.kind === 'crash') c.hasState = false; c.hasThumb = c.hasState; });
     const get = () => { try { return Object.assign({}, defaults, JSON.parse(localStorage.getItem('srb') || '{}')); } catch (e) { return defaults; } };
     return {
-      getState: () => JSON.stringify({ settings: get(), chapters, hasResume: true, resumeChapter: '38', gameComplete: true,
+      getState: () => JSON.stringify({ settings: get(), chapters, hasResume: true, resumeChapter: '38', gameComplete: !/noimport/.test(location.hash),
+        scenesReady: true, thumbBase: '../th/', import: window.SRB_MOCK_IMPORT || { phase: 'idle', percent: 0, busy: false },
         battery: 76, charging: false,
         soundtrackDir: '/storage/emulated/0/Android/data/com.srbport.roadblaster/files/banda_sonora',
         slots: [{ slot: 1, exists: true, date: '20/10/2026 21:04', chapter: '37' }, { slot: 2, exists: true, date: '20/10/2026 22:10', chapter: '94' }, { slot: 3, exists: false }],
@@ -46,9 +48,19 @@
     S.settings[k] = String(v);
     Bridge.setSetting(k, String(v));
   }
-  const thumb = (id) => 'thumbs/' + pad3(id) + '.jpg';
-  const clip = (id) => 'clips/' + pad3(id) + '.mp4';
-  const hasClip = (id) => S.byId[id] && S.byId[id].hasState;
+  // Thumbnails are generated on the device after importing the game (nothing from the
+  // game ships with the app). Missing ones fall back to any scene that has one.
+  const hasThumb = (id) => !!(S.byId[id] && S.byId[id].hasThumb);
+  const thumb = (id) => {
+    if (!hasThumb(id)) {
+      const any = S.chapters.find((c) => c.hasThumb && c.kind !== 'crash' && c.id > 2);
+      if (!any) return '';
+      id = any.id;
+    }
+    return (S.thumbBase || '') + pad3(id) + '.png';
+  };
+  const hasClip = () => false;
+  const clip = () => '';
 
   // ================================================================ sounds
   const Sfx = {
@@ -95,6 +107,7 @@
     down: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>',
     up: '<path d="M12 21V9M7 14l5-5 5 5M4 3h16"/>',
     home: '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    zip: '<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M10 4h2M10 7h2M10 10h2M10 13h2"/><rect x="9.5" y="15" width="3" height="4" rx="1"/>',
   };
   const svg = (k) => '<svg viewBox="0 0 24 24">' + (ICON[k] || '') + '</svg>';
 
@@ -202,25 +215,33 @@
     if (PAUSE) {
       add({ id: 'resume', ico: 'play', label: 'Continuar', sub: 'Volver a la carretera', act: () => Bridge.action('resume', '') });
       add({ id: 'restart', ico: 'restart', label: 'Reiniciar escena', sub: 'Desde el inicio del capítulo', act: () => Bridge.action('restart', '') });
-      add({ id: 'save', ico: 'down', label: 'Guardar partida', panel: 'slots', slotMode: 'save' });
-      add({ id: 'load', ico: 'up', label: 'Cargar partida', panel: 'slots', slotMode: 'load' });
       add({ id: 'scenes', ico: 'grid', label: 'Selector de escenas', panel: 'scenes' });
       add({ id: 'director', ico: 'clap', label: "Director's Mode", panel: 'director' });
       add({ id: 'graphics', ico: 'screen', label: 'Gráficos', panel: 'graphics' });
       add({ id: 'audio', ico: 'wave', label: 'Audio', panel: 'audio' });
       add({ id: 'menu', ico: 'home', label: 'Salir al launcher', sub: 'Vuelve al menú principal · la partida queda guardada', act: () => Bridge.action('menu', '') });
     } else {
-      if (S.hasResume) add({ id: 'resume', ico: 'play', label: 'Continuar', sub: 'Donde lo dejaste', act: () => launch('resume'), hero: 'resume' });
-      add({ id: 'new', ico: 'spark', label: 'Nueva partida', sub: 'Desde el encendido de la consola', act: () => launch('new'), hero: 'new' });
-      add({ id: 'director', ico: 'clap', label: "Director's Mode", panel: 'director' });
+      const ready = S.gameComplete && S.scenesReady;
+      if (!ready) add({ id: 'import', ico: 'zip', label: 'Cargar juego (.zip)', sub: 'Tu copia de Super Road Blaster', act: importZip, hero: 'import' });
+      if (ready && S.hasResume) add({ id: 'resume', ico: 'play', label: 'Continuar', sub: 'Donde lo dejaste', act: () => launch('resume'), hero: 'resume' });
+      if (ready) add({ id: 'new', ico: 'spark', label: 'Nueva partida', sub: 'Desde el encendido de la consola', act: () => launch('new'), hero: 'new' });
+      if (ready) add({ id: 'director', ico: 'clap', label: "Director's Mode", panel: 'director' });
       add({ id: 'graphics', ico: 'screen', label: 'Gráficos', panel: 'graphics' });
       add({ id: 'audio', ico: 'wave', label: 'Audio', panel: 'audio' });
       add({ id: 'controls', ico: 'pad', label: 'Controles', panel: 'controls' });
+      if (ready) add({ id: 'import', ico: 'zip', label: 'Cargar juego (.zip)', sub: 'Sustituye el juego importado', act: importZip, hero: 'import' });
       add({ id: 'quit', ico: 'power', label: 'Salir', act: () => Bridge.action('quit', '') });
     }
   }
 
+  function importZip() {
+    if (S.import && S.import.busy) { Sfx.play('error'); return; }
+    Sfx.play('confirm');
+    Bridge.action('import', '');
+  }
+
   function launch(arg) {
+    if (!S.gameComplete || (S.import && S.import.busy)) { Sfx.play('error'); toast('Primero carga el juego (.zip)'); return; }
     Sfx.play('start', 0.8);
     const f = $('.flash');
     if (f) { f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
@@ -356,10 +377,7 @@
 
   // ---------------------------------------------------------------- panels
   function panelHtml(sec) {
-    if (!PAUSE && !S.gameComplete) {
-      return '<div class="error-box"><h2>Faltan los datos del juego</h2><p>Esta APK se compiló sin los archivos de ' +
-        'Super Road Blaster (ROM, .msu y .pcm). Indica su carpeta en <b>gradle.properties</b> (srbGameDir) y vuelve a compilar.</p></div>';
-    }
+    if (sec.hero === 'import') return panelImport();
     switch (P(sec)) {
       case 'director': return panelDirector();
       case 'graphics': return panelGraphics();
@@ -373,8 +391,8 @@
   }
 
   function heroShot(id, kicker, title, text, chips) {
-    const media = hasClip(id) ? '<video src="' + clip(id) + '" poster="' + thumb(id) + '" style="opacity:0;transition:opacity .5s"></video>'
-      : '<img src="' + thumb(id) + '">';
+    const t = thumb(id);
+    const media = t ? '<img class="kb" src="' + t + '">' : '<div class="noart"></div>';
     return '<div class="shot">' + (hasClip(id) ? '<img src="' + thumb(id) + '" style="position:absolute;inset:0">' : '') + media +
       '<div class="cap"><div class="kicker">' + esc(kicker) + '</div><h2>' + esc(title) + '</h2>' +
       (text ? '<p>' + esc(text) + '</p>' : '') + (chips ? '<div class="meta">' + chips + '</div>' : '') + '</div></div>';
@@ -403,6 +421,20 @@
       'De principio a fin sin tocar nada: QTE automático, sin marcador y sin choques. Unos 19 minutos de anime.',
       '<span class="chip hot">≈ 19 min</span><span class="chip">Sin manos</span><span class="chip">' + (setting('audio') === 'enhanced' ? 'MSU-1 Enhanced' : 'Audio original') + '</span>') + '</div>';
     return '<div class="hero">' + heroShot(2, sec.label, sec.label, '') + '</div>';
+  }
+
+  function panelImport() {
+    const st = S.import || {};
+    const err = st.phase === 'error' ? '<p class="imp-err">' + esc(st.message || 'No se pudo cargar el juego.') + '</p>' : '';
+    const has = S.gameComplete && S.scenesReady;
+    return '<div class="importbox enter">' + svg('zip') +
+      '<h2>' + (has ? 'Cambiar el juego' : 'Carga tu copia del juego') + '</h2>' +
+      '<p>Esta app es solo el launcher: no incluye el juego. Elige el <b>.zip</b> de la versión publicada de ' +
+      '<b>Super Road Blaster</b> con <code>SuperRoadBlaster.sfc</code>, <code>SuperRoadBlaster.msu</code> y las pistas ' +
+      '<code>SuperRoadBlaster-0.pcm</code> … <code>-121.pcm</code>.</p>' +
+      '<p>Después la app recorre la aventura una vez para preparar el selector de escenas y las miniaturas ' +
+      '(un par de minutos, solo la primera vez). Hace falta ~1 GB libre.</p>' + err +
+      '<div class="imp-btn" data-f data-act="import">Ⓐ Elegir archivo .zip</div></div>';
   }
 
   function panelPause() {
@@ -601,6 +633,7 @@
 
   function press(tok) {
     if (mini) { pressMini(tok); return; }
+    if (!PAUSE && S.import && S.import.busy) return;   // importing: wait
     if (ui.intro) { closeIntro(); return; }
     const sec = SECTIONS[ui.sec];
     if (ui.zone === 'menu') {
@@ -663,6 +696,7 @@
     if (tok === 'A' && el && el.dataset.opt) { cycle(el.dataset.opt, 1); return; }
     if (tok === 'A' && el && el.dataset.act) {
       if (el.dataset.act === 'movie') { launch('movie'); return; }
+      if (el.dataset.act === 'import') { importZip(); return; }
       if (el.dataset.act === 'scenes' && !SECTIONS.some((x) => x.id === 'scenes')) {
         Sfx.play('confirm');
         ui.sub = 'scenes'; ui.pidx = 0;
@@ -726,7 +760,11 @@
       const idx = ui.pimg % 4;
       if (!fxImgs[idx]) {
         const img = new Image();
-        img.src = Bridge.readAssetDataUrl ? Bridge.readAssetDataUrl('ui/preview/p' + idx + '.png') : 'preview/p' + idx + '.png';
+        const pick = [37, 3, 61, 94].filter((id) => hasThumb(id));
+        const ids = pick.length ? pick : S.chapters.filter((c) => c.hasThumb).map((c) => c.id);
+        if (!ids.length) return;
+        const id = ids[idx % ids.length];
+        img.src = Bridge.readSceneDataUrl ? Bridge.readSceneDataUrl(id) : thumb(id);
         await img.decode();
         fxImgs[idx] = img;
       }
@@ -783,12 +821,27 @@
     if (PAUSE) return;
     const bg = $('.bg');
     if (!bg) return;
-    bg.innerHTML = '<video src="bg.mp4" muted loop playsinline></video>';
-    const v = $('video', bg);
-    v.addEventListener('canplay', () => v.classList.add('on'), { once: true });
-    const p = v.play();
-    if (p && p.catch) p.catch(() => {});
+    // slideshow of the scene thumbnails generated on this device (none until imported)
+    const ids = S.chapters.filter((c) => c.hasThumb && c.kind !== 'crash' && c.id > 2).map((c) => c.id);
+    clearInterval(bgTimer);
+    bg.innerHTML = '';
+    if (!ids.length) return;
+    let n = Math.floor(Math.random() * ids.length);
+    const show = () => {
+      const img = document.createElement('img');
+      img.src = thumb(ids[n % ids.length]);
+      n += 5;
+      img.onload = () => {
+        bg.appendChild(img);
+        requestAnimationFrame(() => img.classList.add('on'));
+        const old = $$('img', bg);
+        if (old.length > 2) old[0].remove();
+      };
+    };
+    show();
+    bgTimer = setInterval(() => { if (!document.hidden) show(); }, 7000);
   }
+  let bgTimer = 0;
 
   function showIntro() {
     if (PAUSE || setting('intro') === '0' || sessionStorage.getItem('srbIntro')) return;
@@ -813,6 +866,39 @@
     setTimeout(() => d.remove(), 700);
   }
 
+  // Import / scene generation progress (blocks the menu while it runs)
+  let impTimer = 0, impWasBusy = false;
+  function showImport() {
+    if (PAUSE) return;
+    const st = S.import || {};
+    let o = $('.impover');
+    if (!st.busy) {
+      if (o) { o.classList.add('out'); setTimeout(() => o.remove(), 400); }
+      if (impWasBusy) {
+        impWasBusy = false;
+        if (st.phase === 'done') { Sfx.play('start', 0.6); toast('Juego cargado: ¡a la carretera!'); }
+        else if (st.phase === 'error') { Sfx.play('error'); toast(st.message || 'No se pudo cargar el juego'); }
+        buildBackground();
+      }
+      return;
+    }
+    impWasBusy = true;
+    if (!o) {
+      o = document.createElement('div');
+      o.className = 'impover';
+      o.innerHTML = '<div class="box"><div class="ph"></div><h2></h2><div class="bar"><b></b></div><p></p></div>';
+      document.body.appendChild(o);
+    }
+    const scenes = st.phase === 'scenes';
+    $('.ph', o).textContent = scenes ? 'Paso 2 de 2' : 'Paso 1 de 2';
+    $('h2', o).textContent = scenes ? 'Preparando escenas y miniaturas' : 'Copiando el juego';
+    $('.bar b', o).style.width = (st.percent | 0) + '%';
+    $('p', o).textContent = (st.percent | 0) + ' % · ' + (scenes ? 'la app recorre la aventura en modo automático, solo esta vez'
+      : 'leyendo el .zip y comprobando los archivos');
+    clearTimeout(impTimer);
+    impTimer = setTimeout(() => { refresh(); }, 600);
+  }
+
   function refresh() {
     loadState();
     const cur = SECTIONS[ui.sec] && SECTIONS[ui.sec].id;
@@ -825,6 +911,7 @@
     panelKey = '';
     sync(false);
     updateStatus();
+    showImport();
   }
 
   // ---------------------------------------------------------------- entry points
@@ -886,4 +973,5 @@
   setInterval(updateStatus, 20000);
   Sfx.init();
   showIntro();
+  showImport();
 })();

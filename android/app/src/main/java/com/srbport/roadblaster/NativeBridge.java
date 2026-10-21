@@ -26,8 +26,16 @@ public final class NativeBridge {
 
     private NativeBridge() {}
 
+    /** gameDir: imported game folder; gains: MSU-1 Enhanced gain per track (dB). */
     public static native boolean nativeInit(AssetManager assets, byte[] rom, String chaptersTxt,
-                                            String saveDir, String overrideDir);
+                                            String saveDir, String overrideDir, String gameDir, float[] gains);
+
+    // Scene selector generation after importing the game (states + thumbnails)
+    public static native boolean nativeGenBegin(byte[] rom, String chaptersTxt, String gameDir, String saveDir, String outDir);
+    /** Returns scenes saved so far, or -1 when finished. */
+    public static native int nativeGenRun(int frames, int maxFrames, int expected);
+    public static native int nativeGenFrame();
+    public static native void nativeGenEnd();
     public static native void nativeShutdown();
     public static native int nativeRunFrame(short[] audioOut);
     public static native void nativeSetButtons(int mask);

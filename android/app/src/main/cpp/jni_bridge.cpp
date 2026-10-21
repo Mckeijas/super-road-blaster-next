@@ -4,10 +4,14 @@
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
 #include <cstring>
+#include <cstdio>
+#include <set>
+#include <sys/stat.h>
 #include <string>
 #include <vector>
 
 #include "srb_core.h"
+#include "scene_gen.h"
 
 #define LOG_TAG "SRBPort"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -59,8 +63,11 @@ float gMsuVol = 1.0f, gSfxVol = 1.0f;
 
 #define JNIFN(ret, name) extern "C" JNIEXPORT ret JNICALL Java_com_srbport_roadblaster_NativeBridge_##name
 
+// gameDir: folder with the imported game (SuperRoadBlaster.sfc / .msu / -N.pcm).
+// gains: MSU-1 Enhanced loudness gain per track in dB (may be null).
 JNIFN(jboolean, nativeInit)(JNIEnv *env, jclass, jobject assetManager, jbyteArray rom,
-                            jstring chapters, jstring saveDir, jstring overrideDir) {
+                            jstring chapters, jstring saveDir, jstring overrideDir,
+                            jstring gameDir, jfloatArray gains) {
     if (gAssetsRef) env->DeleteGlobalRef(gAssetsRef);
     gAssetsRef = env->NewGlobalRef(assetManager);
     gAssets = AAssetManager_fromJava(env, gAssetsRef);
@@ -72,8 +79,19 @@ JNIFN(jboolean, nativeInit)(JNIEnv *env, jclass, jobject assetManager, jbyteArra
     cfg.chaptersTxt = jstr(env, chapters);
     cfg.saveDir = jstr(env, saveDir);
     cfg.overrideDir = jstr(env, overrideDir);
-    cfg.romPath = cfg.saveDir + "/SuperRoadBlaster.sfc";
-    cfg.opener = openAsset;
+    std::string gd = jstr(env, gameDir);
+    if (!gd.empty()) {               // imported game: plain files next to the ROM
+        cfg.romPath = gd + "/SuperRoadBlaster.sfc";
+        cfg.opener = nullptr;
+    } else {                         // game packed inside the APK (old builds)
+        cfg.romPath = cfg.saveDir + "/SuperRoadBlaster.sfc";
+        cfg.opener = openAsset;
+    }
+    if (gains) {
+        jsize n = env->GetArrayLength(gains);
+        cfg.enhancedGainDb.resize((size_t)n);
+        env->GetFloatArrayRegion(gains, 0, n, cfg.enhancedGainDb.data());
+    }
     gFrame = srb::Frame();
     bool ok = srb::init(cfg);
     LOGI("init %s", ok ? "ok" : "FAILED");
@@ -147,3 +165,18 @@ JNIFN(jint, nativeVideoFrame)(JNIEnv *, jclass) { return srb::currentVideoFrame(
 JNIFN(jint, nativeRumble)(JNIEnv *, jclass) { return srb::pendingRumble(); }
 JNIFN(jint, nativeQteFeedback)(JNIEnv *, jclass) { return srb::lastQteFeedback(); }
 JNIFN(jdouble, nativeFps)(JNIEnv *, jclass) { return srb::fps(); }
+
+
+// Scene generation after importing the game (see srb/scene_gen.h).
+JNIFN(jboolean, nativeGenBegin)(JNIEnv *env, jclass, jbyteArray rom, jstring chapters, jstring gameDir,
+                                jstring saveDir, jstring outDir) {
+    std::vector<uint8_t> r((size_t)env->GetArrayLength(rom));
+    env->GetByteArrayRegion(rom, 0, (jsize)r.size(), (jbyte *)r.data());
+    return srb::genBegin(r, jstr(env, chapters), jstr(env, gameDir), jstr(env, saveDir), jstr(env, outDir))
+               ? JNI_TRUE : JNI_FALSE;
+}
+JNIFN(jint, nativeGenRun)(JNIEnv *, jclass, jint frames, jint maxFrames, jint expected) {
+    return srb::genRun(frames, maxFrames, expected);
+}
+JNIFN(jint, nativeGenFrame)(JNIEnv *, jclass) { return srb::genFrame(); }
+JNIFN(void, nativeGenEnd)(JNIEnv *, jclass) { srb::genEnd(); }

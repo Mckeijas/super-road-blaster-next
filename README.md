@@ -23,12 +23,12 @@ capa de adaptación pensada para consolas portátiles Android con mando, como la
 Portal, y para móviles con pantalla táctil:
 
 - **Launcher propio** con estética synthwave: intro animada, menús con mando o táctiles,
-  vistas previas en vídeo y sonidos de menú creados para el port.
+  carga del juego desde un .zip y sonidos de menú creados para el port.
 - **Restauración HD** de la imagen: limpieza del ruido del códec de vídeo MSU-1, reescalado
   con reconstrucción de bordes (AMD FSR 1.0 EASU) y nitidez adaptativa. También hay modo
   CRT y otros filtros.
-- **Audio MSU-1 Enhanced**: las 122 pistas remasterizadas, sin saturación, con menos ruido
-  y el volumen igualado entre escenas, conservando la sincronía exacta con el vídeo.
+- **Audio MSU-1 Enhanced**: el audio original se procesa en tiempo real: volumen igualado
+  entre escenas, ecualización ligera y limitador de picos, con la sincronía exacta con el vídeo.
 - **Director's Mode**: ver la película completa sin tocar nada, QTE automático o asistido,
   invencibilidad, cámara lenta sin cambio de tono y selector de escenas.
 - **Controles táctiles flotantes** y semitransparentes para jugar en móviles sin mando.
@@ -39,9 +39,9 @@ Portal, y para móviles con pantalla táctil:
 Es un proyecto hecho por afición, **gratuito y sin ningún fin comercial**. No se vende, no
 lleva publicidad y no se distribuye ninguna APK compilada.
 
-Este repositorio **no contiene** la ROM, el archivo de datos `.msu` ni las pistas de audio
-`.pcm` del juego. Para compilar la APK necesitas tu propia copia de la versión publicada de
-Super Road Blaster. Todo el mérito del juego es de sus autores (ver créditos).
+Este repositorio **no contiene** la ROM, el archivo de datos `.msu`, las pistas de audio
+`.pcm` ni ninguna imagen, vídeo o sonido del juego o del anime. La app solo funciona con
+la copia que cargue cada usuario. Todo el mérito del juego es de sus autores (ver créditos).
 
 ## Créditos
 
@@ -72,10 +72,13 @@ Launcher, Director's Mode, restauración HD, MSU-1 Enhanced, controles táctiles
 
 Las instrucciones completas están en [LEEME.md](LEEME.md). En resumen:
 
-1. Coloca esta carpeta (`Android-Port`) dentro de la carpeta con tus archivos del juego
-   (`SuperRoadBlaster.sfc`, `.msu` y `-0.pcm` … `-121.pcm`).
-2. Abre la carpeta `android` con Android Studio.
-3. *Build ▸ Build APK(s)* con la variante **release**.
+1. Abre la carpeta `android` con Android Studio.
+2. *Build ▸ Build APK(s)* con la variante **release**.
+3. Instala la APK y, desde su menú, usa **Cargar juego (.zip)** con tu copia de Super Road
+   Blaster (`SuperRoadBlaster.sfc`, `.msu` y `-0.pcm` … `-121.pcm`).
+
+La APK **no lleva el juego**. Los puntos de inicio de cada escena, las miniaturas y el audio
+Enhanced los genera la app en tu dispositivo a partir de tu copia.
 
 Requisitos: Android 11 o superior, ARM64 y OpenGL ES 3.0.
 

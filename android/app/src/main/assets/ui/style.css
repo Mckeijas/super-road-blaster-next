@@ -378,3 +378,32 @@ body.minimode .mini { display: flex; position: fixed; inset: 0; z-index: 10; fle
 .mini .mitem.on::before, .mini .mitem.on::after { content: ''; position: absolute; top: 50%; width: 0.9em; height: 2px; background: var(--grad); box-shadow: 0 0 1vh var(--sun1); }
 .mini .mitem.on::before { left: 0; } .mini .mitem.on::after { right: 0; }
 .mini .mhint { position: absolute; bottom: calc(var(--u) * 3); color: var(--muted); font-size: calc(var(--u) * 1.3); display: flex; align-items: center; }
+
+/* ===================================================== v1.5: imported game */
+.bg img { position: absolute; inset: -6%; width: 112%; height: 112%; object-fit: cover; opacity: 0;
+  transition: opacity 2.2s ease; animation: drift 24s ease-in-out infinite alternate; filter: saturate(1.1); image-rendering: auto; }
+.bg img.on { opacity: 0.5; }
+.shot img.kb { animation: kenburns 14s ease-in-out infinite alternate; }
+.shot .noart { position: absolute; inset: 0; background:
+  radial-gradient(70% 90% at 70% 30%, rgba(255,45,111,0.35), transparent 70%),
+  radial-gradient(60% 70% at 20% 80%, rgba(56,225,255,0.2), transparent 70%), #0b0716; }
+.importbox { margin: auto; max-width: 62em; text-align: center; background: var(--panel); border: 1px solid var(--line2);
+  border-radius: 12px; padding: calc(var(--u) * 3) calc(var(--u) * 4); line-height: 1.55; color: var(--muted); font-size: calc(var(--u) * 1.4); }
+.importbox > svg { width: calc(var(--u) * 6); height: calc(var(--u) * 6); stroke: var(--sun2); fill: none; stroke-width: 1.4;
+  stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 1.5vh rgba(255,138,31,0.5)); }
+.importbox h2 { font-family: 'Brush', 'Russo', sans-serif; font-weight: 400; color: var(--text); font-size: calc(var(--u) * 3.4); margin: 0.2em 0 0.4em; }
+.importbox p { margin-bottom: 0.8em; }
+.importbox b { color: var(--text); }
+.importbox code { font-family: 'Mono'; color: var(--cyan); }
+.imp-err { color: #ff8aa8 !important; background: rgba(255,45,111,0.12); border: 1px solid rgba(255,45,111,0.4); border-radius: 6px; padding: 0.5em 1em; }
+.imp-btn { display: inline-block; margin-top: calc(var(--u) * 1); padding: 0.7em 2em; border-radius: 2em; background: var(--grad); color: #fff;
+  font-family: 'Brush', 'Chakra', sans-serif; font-size: calc(var(--u) * 2); box-shadow: 0 0 3vh rgba(255,45,111,0.45); transition: transform 0.2s var(--ease); }
+.imp-btn.focus { transform: scale(1.06); box-shadow: 0 0 0 0.3vh #fff, 0 0 4vh rgba(255,45,111,0.7); }
+.impover { position: fixed; inset: 0; z-index: 26; display: grid; place-items: center; background: rgba(7,4,12,0.9); animation: fadein 0.3s ease both; transition: opacity 0.4s; }
+.impover.out { opacity: 0; }
+.impover .box { text-align: center; }
+.impover .ph { font-family: 'Mono'; color: var(--sun3); letter-spacing: 0.4em; text-transform: uppercase; font-size: calc(var(--u) * 1.2); }
+.impover h2 { font-family: 'Brush', 'Russo', sans-serif; font-weight: 400; font-size: calc(var(--u) * 4); margin: 0.3em 0 0.6em; }
+.impover .bar { width: calc(var(--u) * 56); height: 0.7em; border-radius: 1em; background: rgba(255,255,255,0.12); overflow: hidden; margin: 0 auto; }
+.impover .bar b { display: block; height: 100%; background: var(--grad); box-shadow: 0 0 1.5vh var(--sun1); transition: width 0.5s; }
+.impover p { color: var(--muted); margin-top: 1em; font-family: 'Mono'; font-size: calc(var(--u) * 1.25); }

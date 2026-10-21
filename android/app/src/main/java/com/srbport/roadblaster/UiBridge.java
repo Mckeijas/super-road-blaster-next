@@ -38,7 +38,18 @@ public final class UiBridge {
         try {
             JSONObject o = new JSONObject();
             o.put("settings", settings.toJson());
-            o.put("chapters", new JSONArray(GameData.readAssetText(activity.getAssets(), GameData.CHAPTERS_JSON)));
+            // scene availability comes from the data generated on this device after importing
+            JSONArray chapters = new JSONArray(GameData.readAssetText(activity.getAssets(), GameData.CHAPTERS_JSON));
+            for (int i = 0; i < chapters.length(); i++) {
+                JSONObject c = chapters.getJSONObject(i);
+                int id = c.optInt("id", -1);
+                c.put("hasState", GameData.sceneStateFile(activity, id).exists());
+                c.put("hasThumb", GameData.sceneThumbFile(activity, id).exists());
+            }
+            o.put("chapters", chapters);
+            o.put("thumbBase", "file://" + new File(GameData.scenesDir(activity), "thumbs").getAbsolutePath() + "/");
+            o.put("scenesReady", GameImporter.scenesReady(activity));
+            o.put("import", GameImporter.status());
             o.put("hasResume", GameData.resumeFile(activity).exists());
             File ri = GameData.resumeInfoFile(activity);
             o.put("resumeChapter", ri.exists() ? new String(GameData.readFile(ri)).trim() : "-1");
@@ -47,7 +58,7 @@ public final class UiBridge {
                 o.put("battery", bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY));
                 o.put("charging", bm.isCharging());
             }
-            o.put("gameComplete", GameData.isComplete(activity.getAssets()));
+            o.put("gameComplete", GameData.isComplete(activity));
             o.put("soundtrackDir", GameData.soundtrackDir(activity).getAbsolutePath());
             JSONArray slots = new JSONArray();
             SimpleDateFormat fmt = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());
@@ -96,6 +107,18 @@ public final class UiBridge {
             String mime = path.endsWith(".png") ? "image/png" : path.endsWith(".wav") ? "audio/wav"
                     : path.endsWith(".mp4") ? "video/mp4" : "image/jpeg";
             return "data:" + mime + ";base64," + Base64.encodeToString(b, Base64.NO_WRAP);
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    /** data: URL of a generated scene thumbnail (WebGL textures can't use file:// images). */
+    @JavascriptInterface
+    public String readSceneDataUrl(int chapter) {
+        File f = GameData.sceneThumbFile(activity, chapter);
+        if (!f.exists()) return "";
+        try {
+            return "data:image/png;base64," + Base64.encodeToString(GameData.readFile(f), Base64.NO_WRAP);
         } catch (IOException e) {
             return "";
         }

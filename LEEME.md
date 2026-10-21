@@ -7,24 +7,25 @@ simplemente «Super Road Blaster»; ahora se llama **Super Road Blaster Next** (
 
 Es una sola APK con launcher propio, emulación SNES con MSU-1, **restauración HD**,
 **audio MSU-1 Enhanced** y **Director's Mode**. Está pensada para consolas Android con mando
-y pantalla apaisada (desarrollada y probada en AYN Odin 2 Portal, ARM64).
+y pantalla apaisada (desarrollada y probada en AYN Odin 2 Portal, ARM64) y también se puede
+jugar en móviles con los controles táctiles.
+
+**Desde la versión 1.5.0 la APK no lleva el juego**: es solo el launcher y el emulador. El
+juego se carga desde la propia app con tu **.zip** de Super Road Blaster («Cargar juego
+(.zip)»), y todo lo que antes venía preparado (puntos de inicio de cada escena, miniaturas,
+audio Enhanced) lo genera la app en el dispositivo. Ni la APK ni este repositorio contienen
+material del juego ni del anime.
 
 ```
-SuperRoadBlaster\                 ← tus archivos originales (no se tocan)
-├─ SuperRoadBlaster.sfc / .msu / -0.pcm … -121.pcm
-└─ Android-Port\                  ← repositorio git
-   ├─ android\                    ← proyecto de Android Studio (ábrelo a él)
-   │  └─ keystore\srbn.keystore   ← clave de firma (¡haz copia de seguridad!)
-   ├─ gamedata\
-   │  ├─ states\                  ← 119 puntos de inicio de escena (selector)
-   │  └─ enhanced\                ← 122 pistas MSU-1 Enhanced (FLAC)
-   ├─ tools\                      ← herramientas con las que se generó todo (icono incluido)
-   └─ LEEME.md
+Android-Port\                     ← repositorio git (puede estar en cualquier carpeta)
+├─ android\                       ← proyecto de Android Studio (ábrelo a él)
+│  └─ keystore\srbn.keystore      ← clave de firma (¡copia de seguridad! no se sube a git)
+├─ tools\                         ← harness de pruebas en PC, scripts e icono
+├─ README.md                      ← portada para GitHub
+└─ LEEME.md
 ```
 
-La compilación toma tus archivos del juego de la carpeta padre (`srbGameDir=../..` en
-`android/gradle.properties`) y los mete en la APK. **No muevas la carpeta `Android-Port`**
-fuera de `SuperRoadBlaster` o, si lo haces, pon la ruta completa en `srbGameDir`.
+Para compilar **no hace falta ningún archivo del juego**.
 
 ---
 
@@ -38,22 +39,22 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.4.0-release.apk`
-   (≈ 1 GB: lleva dentro el vídeo).
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.5.0-release.apk`
+   (unos pocos MB: el juego se carga después desde la app).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
 
 ### Versiones y nombre de la APK
-La versión está en `android/gradle.properties` → `srbVersion=1.4.0`. **Súbela antes de cada
-build que vayas a instalar** (1.4.0 → 1.4.1 para arreglos, 1.5.0 para novedades). La APK sale
+La versión está en `android/gradle.properties` → `srbVersion=1.5.0`. **Súbela antes de cada
+build que vayas a instalar** (1.5.0 → 1.5.1 para arreglos, 1.6.0 para novedades). La APK sale
 con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
 *Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
-(1.4.0 → 10400); Android no permite instalar una versión con número menor que la instalada.
+(1.5.0 → 10500); Android no permite instalar una versión con número menor que la instalada.
 
 ### Aviso «app potencialmente insegura» (Play Protect)
 Sale con cualquier APK instalada fuera de Google Play que Google no conozca; no depende del
 nombre ni de la versión. Pulsa **Más detalles ▸ Instalar de todos modos**. Si te ofrece
-«Enviar la app para análisis», puedes decir que no (la APK lleva el vídeo del juego).
+«Enviar la app para análisis», puedes decir que no.
 Mientras la firma (`srbn.keystore`) y el nombre de paquete no cambien, las actualizaciones
 se instalan encima sin problemas.
 
@@ -66,8 +67,21 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.4.0-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.5.0-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
+
+### Primera vez: cargar el juego
+1. Copia al dispositivo el **.zip** de la versión publicada de Super Road Blaster. Debe
+   contener `SuperRoadBlaster.sfc`, `SuperRoadBlaster.msu` y `SuperRoadBlaster-0.pcm` …
+   `SuperRoadBlaster-121.pcm` (da igual que estén dentro de una carpeta del zip).
+2. Abre la app → **Cargar juego (.zip)** → elige el archivo.
+3. **Paso 1 de 2**: la app copia y comprueba los archivos (hace falta ~1 GB libre).
+4. **Paso 2 de 2**: la app recorre la aventura en modo automático para crear los puntos de
+   inicio del selector de escenas y las miniaturas. Tarda uno o dos minutos y solo se hace una
+   vez. Deja la pantalla encendida; si se interrumpe, se reanuda al volver a abrir la app.
+
+Puedes borrar el .zip después. Para cambiar de copia, vuelve a usar **Cargar juego (.zip)**.
+Al actualizar la app a una versión nueva no hace falta volver a cargarlo.
 
 ## 3. El launcher
 
@@ -82,6 +96,7 @@ pulsa **Start** para entrar. Se puede desactivar en *Controles ▸ Intro al abri
 | Gráficos | Filtro con vista previa en vivo y comparación en pantalla partida |
 | Audio | MSU-1 Enhanced / Original / Alternativa, volúmenes, sonidos del menú |
 | Controles | Distribución de botones, **controles táctiles**, vibración, intro |
+| Cargar juego (.zip) | Importar o sustituir tu copia del juego |
 | Salir | Cerrar la app |
 
 Fondo con montaje de escenas del anime, vistas previas en vídeo, cursor animado y sonidos
@@ -105,10 +120,10 @@ de menú sintetizados para el port. Fuente de menús: Kaushan Script.
 - Formato 4:3 original, pantalla completa o zoom.
 
 ### Audio · MSU-1 Enhanced
-Las 122 pistas están remasterizadas: sin saturación (42 pistas llegaban a 0 dBFS), ruido
-reducido, ecualización ligera y volumen igualado entre escenas (de hasta 20 dB de diferencia
-a 1,6 dB de desviación). Duración idéntica al sample, así que la sincronía con el vídeo es
-exacta. Salida a 48 kHz.
+El audio de las 122 pistas se mejora **en tiempo real** sobre tus archivos originales:
+volumen igualado entre escenas (-14 LUFS; antes había hasta 20 dB de diferencia),
+ecualización ligera y un limitador de picos que evita la saturación. No se guarda ningún
+audio aparte. La sincronía con el vídeo es exacta. Salida a 48 kHz.
 
 **Banda sonora alternativa**: elige «Alternativa» y copia tus archivos en
 `Android/data/com.srbport.roadblaster/files/banda_sonora/` del dispositivo, con el nombre
@@ -123,7 +138,7 @@ Los que falten se toman del original. **La duración debe coincidir con la origi
 | Botón derecho (B) | Acelerar / turbo (A de SNES) |
 | Botón inferior (A) | Frenar (B de SNES) |
 | **Start** | **Pausa**: «PAUSA» con *Continuar* y *Salir al menú principal* |
-| Atrás | Menú completo: guardar o cargar (3 ranuras), escenas, Director's Mode, gráficos, audio |
+| Atrás | Menú completo: escenas, Director's Mode, gráficos, audio |
 | L2 / R2 (mantener) | Cámara lenta / avance rápido |
 | R3 | Mostrar u ocultar marcador |
 
@@ -142,23 +157,26 @@ la A de SNES. La partida se guarda sola al salir o al pausar el dispositivo.
 
 - **La app se cierra al empezar**: con el dispositivo por ADB,
   `adb logcat -s SRBPort SRBGame SRBRenderer SRBEmu`.
-- **«No encuentro SuperRoadBlaster.msu»** al compilar: revisa `srbGameDir` en
-  `android/gradle.properties`.
+- **«Al .zip le falta…»** al cargar el juego: el zip no tiene la ROM, el `.msu` o alguna
+  pista `.pcm`. Usa el paquete completo de la versión publicada.
+- **El selector de escenas sale vacío**: el paso 2 no terminó. Abre la app de nuevo y deja
+  que acabe.
 - **Falta de memoria al compilar**: sube `org.gradle.jvmargs=-Xmx4g` a `-Xmx6g`.
 - **Android pide desinstalar para actualizar**: la APK no se firmó con `srbn.keystore`;
   no aceptes y revisa que el archivo esté en `android\keystore\`.
 
 ## 6. Repositorio git
 
-Esta carpeta es un repositorio git. **No incluye** la ROM, el `.msu`, los `.pcm`, la
-carpeta `gamedata`, las APK, la clave de firma ni los archivos de compilación. Sí incluye
-los clips y miniaturas del launcher, que salen del anime: **mantén el repositorio privado**.
+Esta carpeta es un repositorio git **apto para publicarse**: no contiene la ROM, el `.msu`,
+los `.pcm`, vídeo, imágenes ni audio del anime, ni las APK, la clave de firma o los archivos
+de compilación. Los clips y miniaturas de versiones anteriores se han borrado también del
+historial. La portada de GitHub es `README.md`.
 
 ## Licencias y uso
 
-- Juego Super Road Blaster © snesdev0815 (código MIT). El vídeo y el audio proceden del
-  anime Road Blaster y tienen derechos de terceros: **la APK es para uso personal, no la
-  distribuyas.**
+- Juego Super Road Blaster © snesdev0815 (código MIT), basado en *Road Blaster* (Data East,
+  1985; animación de Toei Animation). El vídeo y el audio del juego tienen derechos de
+  terceros y **no se incluyen**: cada usuario carga su propia copia.
 - Snes9x (licencia Snes9x, no comercial) · AMD FSR 1.0 (MIT) · Sonic (Apache 2.0) ·
   dr_flac (dominio público / MIT-0) · fuentes Chakra Petch, Russo One, Share Tech Mono y
   Kaushan Script (OFL). Sonidos del menú e icono SRBN creados para este port.
