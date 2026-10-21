@@ -14,7 +14,7 @@
   function makeMockBridge() {
     // Browser preview: settings in localStorage, data from relative files.
     const defaults = { filter: 'hd', color: '1', aspect: '43', audio: 'enhanced', msuVol: '100', sfxVol: '100',
-      qte: '0', lives: '0', slowSpeed: '0.5', slowmo: '0', hud: '1', layout: 'snes', rumble: '1', uiSound: '1', intro: '1', touch: 'auto', touchAlpha: '0.2' };
+      qte: '0', lives: '0', slowSpeed: '0.5', slowmo: '0', hud: '1', layout: 'snes', rumble: '1', uiSound: '1', intro: '1', touch: 'auto', touchAlpha: '0.2', hdVideo: '1' };
     let chapters = [];
     const x = new XMLHttpRequest();
     x.open('GET', '../game/chapters.json', false);
@@ -132,6 +132,7 @@
     layout: { label: 'Distribución de botones', desc: '', values: [['snes', 'Por posición (SNES)'], ['xbox', 'Por etiqueta']] },
     rumble: { label: 'Vibración', desc: 'Vibra con los impactos del anime.', values: [['0', 'No'], ['1', 'Sí']], sw: true },
     touch: { label: 'Controles táctiles', desc: '', values: [['auto', 'Automático'], ['on', 'Siempre'], ['off', 'Desactivados']] },
+    hdVideo: { label: 'Usar el vídeo HD', desc: 'La película en alta definición con el salpicadero animado. Se aplica al entrar en la partida.', values: [['0', 'No'], ['1', 'Sí']], sw: true },
     touchAlpha: { label: 'Transparencia de los botones', desc: 'Cuanto más transparentes, menos tapan la imagen.', values: [['0.12', 'Muy alta'], ['0.2', 'Alta'], ['0.3', 'Media'], ['0.45', 'Baja']] },
   };
   const FILTER_DESC = {
@@ -232,6 +233,7 @@
       add({ id: 'graphics', ico: 'screen', label: 'Gráficos', panel: 'graphics' });
       add({ id: 'audio', ico: 'wave', label: 'Audio', panel: 'audio' });
       add({ id: 'controls', ico: 'pad', label: 'Controles', panel: 'controls' });
+      if (ready) add({ id: 'hd', ico: 'film', label: 'Pack HD', sub: S.hdInstalled ? 'Instalado' : 'Película en alta definición · opcional', panel: 'hdpack' });
       if (ready) add({ id: 'import', ico: 'zip', label: 'Cargar juego (.zip)', sub: 'Sustituye el juego importado', act: importZip, hero: 'import' });
       add({ id: 'quit', ico: 'power', label: 'Salir', act: () => Bridge.action('quit', '') });
     }
@@ -388,6 +390,7 @@
       case 'audio': return panelAudio();
       case 'controls': return panelControls();
       case 'records': return panelRecords();
+      case 'hdpack': return panelHd();
       case 'scenes': return panelScenes();
       case 'slots': return panelSlots(sec.slotMode);
       case 'credits': return panelCredits();
@@ -456,6 +459,28 @@
       '<p>Después la app recorre la aventura una vez para preparar el selector de escenas y las miniaturas ' +
       '(un par de minutos, solo la primera vez). Hace falta ~1 GB libre.</p>' + err +
       '<div class="imp-btn" data-f data-act="import">Ⓐ Elegir archivo .zip</div></div>';
+  }
+
+  function panelHd() {
+    const on = !!S.hdInstalled;
+    let h = '<div class="section-title">Pack HD · add-on opcional</div><div class="opts stagger">';
+    if (on) h += optRow('hdVideo');
+    h += actionRow('importHd', on ? 'Reinstalar el pack HD' : 'Instalar el pack HD (.zip)',
+      'Elige SRBN-PackHD.zip, creado con tools/hdpack a partir de tu copia de la película HD.', 'Ⓐ Elegir .zip');
+    if (on) h += actionRow('removeHd', 'Desinstalar el pack HD', 'Libera ' + (S.hdSizeMb | 0) + ' MB. El juego sigue funcionando con el vídeo original.', 'Ⓐ Borrar');
+    h += '</div><p class="note">' + (on
+      ? 'Instalado. En los capítulos de la historia verás la película en alta definición; el salpicadero muestra tus puntos y vidas, y la palanca de la derecha sube al acelerar y baja al frenar. Los choques y las pantallas propias del juego usan el vídeo original.'
+      : 'El pack HD sustituye el vídeo de la aventura por la película en alta definición sin tocar la jugabilidad: sigues acelerando, frenando y girando igual. Ocupa unos 600 MB y se instala y desinstala por separado.') + '</p>';
+    return h;
+  }
+
+  let removeArmed = 0;
+  function removeHd() {
+    if (Date.now() - removeArmed > 3000) { removeArmed = Date.now(); Sfx.play('error'); toast('Pulsa otra vez para borrar el pack HD'); return; }
+    removeArmed = 0;
+    Sfx.play('confirm');
+    Bridge.action('removeHd', '');
+    toast('Pack HD desinstalado');
   }
 
   function panelPause() {
@@ -718,6 +743,11 @@
     if (tok === 'A' && el && el.dataset.act) {
       if (el.dataset.act === 'movie') { launch('movie'); return; }
       if (el.dataset.act === 'import') { importZip(); return; }
+      if (el.dataset.act === 'importHd') {
+        if (S.import && S.import.busy) { Sfx.play('error'); return; }
+        Sfx.play('confirm'); Bridge.action('importHd', ''); return;
+      }
+      if (el.dataset.act === 'removeHd') { removeHd(); return; }
       if (el.dataset.act === 'scenes' && !SECTIONS.some((x) => x.id === 'scenes')) {
         Sfx.play('confirm');
         ui.sub = 'scenes'; ui.pidx = 0;
@@ -897,7 +927,7 @@
       if (o) { o.classList.add('out'); setTimeout(() => o.remove(), 400); }
       if (impWasBusy) {
         impWasBusy = false;
-        if (st.phase === 'done') { Sfx.play('start', 0.6); toast('Juego cargado: ¡a la carretera!'); }
+        if (st.phase === 'done') { Sfx.play('start', 0.6); toast(st.message === 'Pack HD instalado' ? 'Pack HD instalado: ¡disfrútalo en alta definición!' : 'Juego cargado: ¡a la carretera!'); }
         else if (st.phase === 'error') { Sfx.play('error'); toast(st.message || 'No se pudo cargar el juego'); }
         buildBackground();
       }
@@ -910,11 +940,12 @@
       o.innerHTML = '<div class="box"><div class="ph"></div><h2></h2><div class="bar"><b></b></div><p></p></div>';
       document.body.appendChild(o);
     }
-    const scenes = st.phase === 'scenes';
-    $('.ph', o).textContent = scenes ? 'Paso 2 de 2' : 'Paso 1 de 2';
-    $('h2', o).textContent = scenes ? 'Preparando escenas y miniaturas' : 'Copiando el juego';
+    const scenes = st.phase === 'scenes', hd = st.phase === 'hd';
+    $('.ph', o).textContent = hd ? 'Pack HD' : scenes ? 'Paso 2 de 2' : 'Paso 1 de 2';
+    $('h2', o).textContent = hd ? 'Instalando la película HD' : scenes ? 'Preparando escenas y miniaturas' : 'Copiando el juego';
     $('.bar b', o).style.width = (st.percent | 0) + '%';
-    $('p', o).textContent = (st.percent | 0) + ' % · ' + (scenes ? 'la app recorre la aventura en modo automático, solo esta vez'
+    $('p', o).textContent = (st.percent | 0) + ' % · ' + (hd ? 'copiando unos 600 MB, no cierres la app'
+      : scenes ? 'la app recorre la aventura en modo automático, solo esta vez'
       : 'leyendo el .zip y comprobando los archivos');
     clearTimeout(impTimer);
     impTimer = setTimeout(() => { refresh(); }, 600);

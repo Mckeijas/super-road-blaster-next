@@ -53,6 +53,11 @@ struct Frame {
     std::vector<uint16_t> pixels; // RGB565, tightly packed width*height
     int width = 0, height = 0;
     uint32_t serial = 0;
+    // HD add-on metadata
+    bool overlay = false;         // HUD only (video layers hidden): draw the HD film below
+    int track = -1;               // MSU-1 track (= chapter) of this picture
+    int audioPos = -1;            // MSU-1 audio position in samples (44.1 kHz) at this picture
+    uint16_t key = 0;             // backdrop colour = transparent pixels in overlay mode
 };
 
 bool init(const Config &cfg);
@@ -93,5 +98,11 @@ int pendingRumble();              // 0 or strength 1..255; resets on read
 
 // Low level (tools / harness).
 uint8_t *wram();
+
+// HD video add-on ------------------------------------------------------------------
+void setHdOverlay(bool on);                         // use the HD film where available
+void setHdChapters(const std::vector<uint8_t> &mask); // chapters present in the film
+bool playerStats(int *score, int *lives);           // current score (x1000 on screen) and lives
+uint16_t effectiveButtons();                        // buttons the game sees (pad + automatic QTE)
 size_t romPatchOffsetLoseLife();
 } // namespace srb

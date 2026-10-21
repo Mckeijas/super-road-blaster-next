@@ -16,7 +16,7 @@ import org.json.JSONObject;
 
 /** Front-end launcher: graphics / audio / Director's Mode options and scene select. */
 public final class LauncherActivity extends Activity implements UiBridge.Host {
-    private static final int REQ_IMPORT = 41;
+    private static final int REQ_IMPORT = 41, REQ_HD = 42;
     private WebView web;
     private Settings settings;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -59,14 +59,16 @@ public final class LauncherActivity extends Activity implements UiBridge.Host {
         });
     }
 
-    private void pickZip() {
+    private void pickZip() { pickZip(REQ_IMPORT); }
+
+    private void pickZip(int req) {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
         i.setType("*/*");
         i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed",
                 "application/x-zip", "application/octet-stream"});
         try {
-            startActivityForResult(i, REQ_IMPORT);
+            startActivityForResult(i, req);
         } catch (Exception e) {
             web.evaluateJavascript("window.srbToast && window.srbToast('No hay explorador de archivos disponible')", null);
         }
@@ -75,9 +77,10 @@ public final class LauncherActivity extends Activity implements UiBridge.Host {
     @Override
     protected void onActivityResult(int req, int result, Intent data) {
         super.onActivityResult(req, result, data);
-        if (req != REQ_IMPORT || result != RESULT_OK || data == null || data.getData() == null) return;
+        if ((req != REQ_IMPORT && req != REQ_HD) || result != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
-        GameImporter.startImport(this, uri);
+        if (req == REQ_HD) GameImporter.startHdImport(this, uri);
+        else GameImporter.startImport(this, uri);
         web.evaluateJavascript("window.srbRefresh && window.srbRefresh()", null);
     }
 
@@ -104,6 +107,13 @@ public final class LauncherActivity extends Activity implements UiBridge.Host {
             }
             case "import":
                 if (!GameImporter.isBusy()) pickZip();
+                break;
+            case "importHd":
+                if (!GameImporter.isBusy()) pickZip(REQ_HD);
+                break;
+            case "removeHd":
+                if (!GameImporter.isBusy()) GameImporter.removeHd(this);
+                web.evaluateJavascript("window.srbRefresh && window.srbRefresh()", null);
                 break;
             case "quit":
                 finishAffinity();

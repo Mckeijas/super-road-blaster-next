@@ -354,6 +354,12 @@ struct State {
     std::atomic<bool> hudVisible{true};
     std::atomic<float> speed{1.0f};
     std::atomic<bool> enhancedAudio{false};
+    // HD video add-on: in mapped chapters the SNES draws only its HUD (sprites, BG3); the
+    // video layers BG1/BG2 are hidden and the app shows the HD film underneath.
+    std::atomic<bool> hdOverlay{false};
+    std::vector<uint8_t> hdChapters;     // 1 = chapter present in the HD film
+    std::mutex hdMutex;
+    bool frameOverlay = false;           // layers used for the frame being rendered
 
     uint16_t injected = 0, blocked = 0;
     int framesSinceInject = 9999;
@@ -437,6 +443,16 @@ void videoCb(const void *data, unsigned w, unsigned h, size_t pitch) {
     const uint8_t *src = (const uint8_t *)data;
     for (unsigned y = 0; y < h; ++y)
         memcpy(&g->frame.pixels[(size_t)y * w], src + y * pitch, w * 2);
+    // what this picture belongs to, for the HD add-on (exact sync with the MSU-1 audio)
+    g->frame.overlay = g->frameOverlay;
+    g->frame.track = (MSU1.MSU1_STATUS & AudioPlaying) ? (int)MSU1.MSU1_CURRENT_TRACK : -1;
+    g->frame.audioPos = (MSU1.MSU1_STATUS & AudioPlaying) && MSU1.MSU1_AUDIO_POS >= 8
+                            ? (int)((MSU1.MSU1_AUDIO_POS - 8) / 4) : -1;
+    {
+        uint16_t c = PPU.CGDATA[0];          // backdrop colour (BGR555) = transparent in overlay
+        int r = c & 31, gg = (c >> 5) & 31, b = (c >> 10) & 31;
+        g->frame.key = (uint16_t)((r << 11) | (((gg << 1) | (gg >> 4)) << 5) | b);
+    }
     g->frame.serial++;
 }
 
@@ -592,11 +608,23 @@ void applyLivesPatch() {
     g->patched = want;
 }
 
+int trackNow();
+
+bool hdMapped(int track) {
+    if (!g->hdOverlay.load() || track < 0) return false;
+    std::lock_guard<std::mutex> lk(g->hdMutex);
+    return track < (int)g->hdChapters.size() && g->hdChapters[(size_t)track];
+}
+
 void applyLayers() {
     // Movie mode / HUD off: hide sprites (score, arrows, steering wheel) and BG3
     // (dashboard, text). Video lives on BG1/BG2.
     bool hide = g->movieMode.load() || !g->hudVisible.load();
-    Settings.BG_Forced = hide ? (uint8)(0x10 | 0x04) : 0;
+    uint8 forced = hide ? (uint8)(0x10 | 0x04) : 0;
+    // HD add-on: no MSU-1 video in chapters the film covers (the app draws the HD frame)
+    g->frameOverlay = hdMapped(trackNow());
+    if (g->frameOverlay) forced |= 0x01 | 0x02 | 0x04;   // HUD = sprites only
+    Settings.BG_Forced = forced;
 }
 
 int trackNow() {
@@ -786,6 +814,10 @@ bool copyFrame(Frame &dst) {
     dst.height = g->frame.height;
     dst.serial = g->frame.serial;
     dst.pixels = g->frame.pixels;
+    dst.overlay = g->frame.overlay;
+    dst.track = g->frame.track;
+    dst.audioPos = g->frame.audioPos;
+    dst.key = g->frame.key;
     return true;
 }
 
@@ -793,6 +825,33 @@ double fps() { return g ? g->fps : 50.0; }
 int lastQteFeedback() { return g ? g->framesSinceInject : 9999; }
 int pendingRumble() { return g ? g->rumble.exchange(0) : 0; }
 uint8_t *wram() { return Memory.RAM; }
+
+void setHdOverlay(bool on) { if (g) g->hdOverlay = on; }
+uint16_t effectiveButtons() { return g ? effectiveMask() : 0; }
+void setHdChapters(const std::vector<uint8_t> &mask) {
+    if (!g) return;
+    std::lock_guard<std::mutex> lk(g->hdMutex);
+    g->hdChapters = mask;
+}
+
+// The Player object (class id 52, see the game's oop.h) holds score (16-bit, shown x1000) and
+// lives in its direct page: iterator struct (28 bytes) + score + name[4] + lifes. Its entry
+// is found in the object stack (16-byte records: flags, id, num, void, properties, dp...).
+bool playerStats(int *score, int *lives) {
+    if (!g || !g->loaded) return false;
+    const uint8_t *w = Memory.RAM;
+    for (int o = 0x6000; o < 0x7000; o += 2) {
+        if (w[o + 1] != 52 || !(w[o] & 0x01)) continue;
+        int dp = w[o + 8] | (w[o + 9] << 8);
+        if (dp <= 0 || dp + 36 >= 0x2000) continue;
+        int lv = w[dp + 34];
+        if (lv > 20) continue;
+        *score = w[dp + 28] | (w[dp + 29] << 8);
+        *lives = lv;
+        return true;
+    }
+    return false;
+}
 size_t romPatchOffsetLoseLife() { return g ? g->loseLifeDec : 0; }
 
 } // namespace srb

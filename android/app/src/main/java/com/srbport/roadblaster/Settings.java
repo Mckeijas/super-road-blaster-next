@@ -17,6 +17,7 @@ public final class Settings {
         DEFAULTS.put("filter", "hd");          // original | smooth | hd | hd_strong | crt
         DEFAULTS.put("color", "1");            // 1 = remastered colours
         DEFAULTS.put("aspect", "43");          // 43 | fill | zoom
+        DEFAULTS.put("hdVideo", "1");          // use the HD film when the HD pack is installed
         // Audio
         DEFAULTS.put("audio", "enhanced");     // original | enhanced | custom
         DEFAULTS.put("msuVol", "100");         // 0..150 %

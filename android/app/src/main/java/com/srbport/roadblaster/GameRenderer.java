@@ -28,7 +28,10 @@ public final class GameRenderer implements GLSurfaceView.Renderer {
 
     private final AssetManager assets;
     private final ByteBuffer frame = ByteBuffer.allocateDirect(512 * 480 * 2).order(ByteOrder.nativeOrder());
-    private final int[] info = new int[2];
+    private final int[] info = new int[6];
+    private int track = -1, audioPos = -1, keyColor;
+    private boolean overlayFrame;
+    private volatile HdCompositor hd;
     private int texW, texH;
     private int lastW, lastH; // size of the frame kept in `frame` (survives GL context loss)
     private int srcTex;
@@ -65,6 +68,9 @@ public final class GameRenderer implements GLSurfaceView.Renderer {
 
     public GameRenderer(AssetManager am) { assets = am; }
 
+    /** HD video add-on (null = off). Set before the surface is created. */
+    public void setHd(HdCompositor c) { hd = c; }
+
     public void configure(String filter, boolean enhancedColor, String aspect) {
         this.filter = filter;
         this.color = enhancedColor ? 1f : 0f;
@@ -95,6 +101,8 @@ public final class GameRenderer implements GLSurfaceView.Renderer {
         GLES30.glGenFramebuffers(2, fbo, 0);
         fboW[0] = fboW[1] = fboH[0] = fboH[1] = 0;
         hasFrame = false;
+        HdCompositor h = hd;
+        if (h != null) h.onSurfaceCreated(quad);
     }
 
     @Override
@@ -108,6 +116,10 @@ public final class GameRenderer implements GLSurfaceView.Renderer {
         if (NativeBridge.nativeCopyFrame(frame, info) == 1) {
             lastW = info[0];
             lastH = info[1];
+            overlayFrame = info[2] != 0;
+            track = info[3];
+            audioPos = info[4];
+            keyColor = info[5];
             upload(lastW, lastH);
             hasFrame = true;
         } else if (!hasFrame && lastW > 0) {
@@ -119,15 +131,46 @@ public final class GameRenderer implements GLSurfaceView.Renderer {
         GLES30.glClearColor(0, 0, 0, 1);
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
         if (!hasFrame) return;
+        HdCompositor h = hd;
+        if (h != null) {
+            // tell the emulator whether the next pictures can use the HD film behind them
+            NativeBridge.nativeSetHdOverlay(h.prepare(track, audioPos));
+            if (overlayFrame) {
+                float dim = pauseLevel() * 0.62f;
+                h.draw(hdViewport(), track, audioPos, srcTex, texW, texH, keyColor,
+                        NativeBridge.nativeEffectiveButtons(), dim);
+                return;
+            }
+        }
         renderPipeline();
         renderPauseBackdrop();
     }
 
-    private void renderPauseBackdrop() {
+    private float pauseLevel() {
         float target = pauseTarget ? 1f : 0f;
         float t = Math.min(1f, (System.nanoTime() - pauseChanged) / 220_000_000f);
-        float e = 1f - (1f - t) * (1f - t) * (1f - t); // ease-out cubic
+        float e = 1f - (1f - t) * (1f - t) * (1f - t);
         pauseAmount = pauseFrom + (target - pauseFrom) * e;
+        return pauseAmount;
+    }
+
+    /** 4:3 picture for the film (fills the screen in "fill" mode, width in "zoom"). */
+    private int[] hdViewport() {
+        if ("fill".equals(aspect)) return new int[]{0, 0, viewW, viewH};
+        float ar = 4f / 3f;
+        int w, h;
+        if ("zoom".equals(aspect) || viewW / (float) viewH <= ar) {
+            w = viewW;
+            h = Math.round(viewW / ar);
+        } else {
+            h = viewH;
+            w = Math.round(viewH * ar);
+        }
+        return new int[]{(viewW - w) / 2, (viewH - h) / 2, w, h};
+    }
+
+    private void renderPauseBackdrop() {
+        pauseLevel();
         if (pauseAmount <= 0.001f) return;
         Integer prog = programs.get("pause");
         if (prog == null) return;

@@ -27,6 +27,10 @@ Portal, y para móviles con pantalla táctil:
 - **Restauración HD** de la imagen: limpieza del ruido del códec de vídeo MSU-1, reescalado
   con reconstrucción de bordes (AMD FSR 1.0 EASU) y nitidez adaptativa. También hay modo
   CRT y otros filtros.
+- **Pack HD opcional**: un add-on que se instala aparte y cambia el vídeo por la película en
+  alta definición, sincronizada con el juego y con el salpicadero animado (puntos, vidas y
+  palanca que sigue al acelerador y al freno). Se crea con `tools/hdpack` a partir de tu
+  propia copia; el repositorio no incluye ningún vídeo.
 - **Audio MSU-1 Enhanced**: el audio original se procesa en tiempo real: volumen igualado
   entre escenas, ecualización ligera y limitador de picos, con la sincronía exacta con el vídeo.
 - **Director's Mode**: ver la película completa sin tocar nada, QTE automático o asistido,

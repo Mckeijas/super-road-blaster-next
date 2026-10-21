@@ -109,6 +109,90 @@ public final class GameImporter {
         worker.start();
     }
 
+    // ------------------------------------------------------------------ HD video add-on
+    private static final String[] HD_FILES = {"hdpack.json", "hd.mp4", "patch_help.png", "patch_pause.png",
+            "patch_screen.png", "lever_up.png", "lever_mid.png", "lever_down.png"};
+
+    /** Installs the HD pack (.zip made with tools/hdpack/make_hdpack.py). */
+    public static synchronized void startHdImport(Context ctx, Uri uri) {
+        if (isBusy()) return;
+        Context app = ctx.getApplicationContext();
+        phase = "hd";
+        percent = 0;
+        message = "";
+        worker = new Thread(() -> {
+            try {
+                importHd(app, uri);
+                phase = "done";
+                percent = 100;
+                message = "Pack HD instalado";
+            } catch (Exception e) {
+                Log.e(TAG, "hd import", e);
+                phase = "error";
+                message = e.getMessage() == null ? e.toString() : e.getMessage();
+            }
+        }, "srb-hd-import");
+        worker.start();
+    }
+
+    public static void removeHd(Context ctx) {
+        deleteTree(new File(ctx.getFilesDir(), "hd"));
+    }
+
+    private static void importHd(Context ctx, Uri uri) throws IOException {
+        long zipSize = sizeOf(ctx, uri);
+        File staging = new File(ctx.getFilesDir(), "hd_import");
+        deleteTree(staging);
+        staging.mkdirs();
+        long free = new StatFs(ctx.getFilesDir().getAbsolutePath()).getAvailableBytes();
+        if (zipSize > 0 && free < zipSize + (64L << 20)) {
+            deleteTree(staging);
+            throw new IOException(String.format(Locale.ROOT,
+                    "No hay espacio suficiente: hacen falta unos %d MB libres.", (zipSize + (64L << 20)) >> 20));
+        }
+        java.util.Set<String> wanted = new java.util.HashSet<>(java.util.Arrays.asList(HD_FILES));
+        java.util.Set<String> got = new java.util.HashSet<>();
+        try (InputStream raw = ctx.getContentResolver().openInputStream(uri)) {
+            if (raw == null) throw new IOException("No se pudo abrir el archivo.");
+            CountingStream counted = new CountingStream(raw);
+            try (ZipInputStream zin = new ZipInputStream(counted)) {
+                ZipEntry e;
+                byte[] buf = new byte[1 << 18];
+                while ((e = zin.getNextEntry()) != null) {
+                    if (e.isDirectory()) continue;
+                    String name = e.getName();
+                    String base = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1);
+                    if (!wanted.contains(base)) continue;
+                    try (OutputStream os = new FileOutputStream(new File(staging, base))) {
+                        int r;
+                        while ((r = zin.read(buf)) > 0) {
+                            os.write(buf, 0, r);
+                            if (zipSize > 0) percent = (int) Math.min(99, counted.count * 100 / zipSize);
+                        }
+                    }
+                    got.add(base);
+                }
+            }
+        } catch (IOException e) {
+            deleteTree(staging);
+            if (String.valueOf(e.getMessage()).contains("ENOSPC")) throw new IOException("Se llenó el almacenamiento del dispositivo.");
+            if (e instanceof java.util.zip.ZipException) throw new IOException("El archivo no es un .zip válido.");
+            throw e;
+        }
+        if (!got.contains("hdpack.json") || !got.contains("hd.mp4")) {
+            deleteTree(staging);
+            throw new IOException("El .zip no es un pack HD de SRBN.");
+        }
+        File dst = new File(ctx.getFilesDir(), "hd");
+        deleteTree(dst);
+        if (!staging.renameTo(dst)) throw new IOException("No se pudo guardar el pack HD.");
+        if (HdPack.load(ctx) == null) {
+            deleteTree(dst);
+            throw new IOException("El pack HD está dañado.");
+        }
+        Log.i(TAG, "hd pack installed");
+    }
+
     // ------------------------------------------------------------------ 1. copy the zip
     private static void importZip(Context ctx, Uri uri) throws IOException {
         long zipSize = sizeOf(ctx, uri);

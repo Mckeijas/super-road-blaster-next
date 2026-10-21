@@ -3,6 +3,7 @@
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
+#include <algorithm>
 #include <cstring>
 #include <cstdio>
 #include <set>
@@ -147,7 +148,8 @@ JNIFN(jboolean, nativeLoadState)(JNIEnv *env, jclass, jbyteArray data) {
 JNIFN(void, nativeSaveSram)(JNIEnv *, jclass) { srb::saveSram(); }
 
 // Copies the newest frame (RGB565) into a direct ByteBuffer.
-// info[0] = width, info[1] = height. Returns 1 if a new frame was copied.
+// info = {width, height, overlay (HD add-on: HUD only), track, MSU-1 audio sample, key colour}.
+// Returns 1 if a new frame was copied.
 JNIFN(jint, nativeCopyFrame)(JNIEnv *env, jclass, jobject directBuffer, jintArray info) {
     if (!srb::copyFrame(gFrame)) return 0;
     void *dst = env->GetDirectBufferAddress(directBuffer);
@@ -155,10 +157,27 @@ JNIFN(jint, nativeCopyFrame)(JNIEnv *env, jclass, jobject directBuffer, jintArra
     size_t bytes = gFrame.pixels.size() * 2;
     if (!dst || (jlong)bytes > cap) return 0;
     memcpy(dst, gFrame.pixels.data(), bytes);
-    jint wh[2] = {gFrame.width, gFrame.height};
-    env->SetIntArrayRegion(info, 0, 2, wh);
+    jint meta[6] = {gFrame.width, gFrame.height, gFrame.overlay ? 1 : 0, gFrame.track, gFrame.audioPos, gFrame.key};
+    env->SetIntArrayRegion(info, 0, std::min<jsize>(6, env->GetArrayLength(info)), meta);
     return 1;
 }
+
+// --- HD video add-on -------------------------------------------------------------------
+JNIFN(void, nativeSetHdOverlay)(JNIEnv *, jclass, jboolean on) { srb::setHdOverlay(on == JNI_TRUE); }
+JNIFN(void, nativeSetHdChapters)(JNIEnv *env, jclass, jbyteArray mask) {
+    std::vector<uint8_t> m((size_t)env->GetArrayLength(mask));
+    env->GetByteArrayRegion(mask, 0, (jsize)m.size(), (jbyte *)m.data());
+    srb::setHdChapters(m);
+}
+// out = {score, lives}; returns false if the player object is not alive (title, menus...)
+JNIFN(jboolean, nativePlayerStats)(JNIEnv *env, jclass, jintArray out) {
+    int sc = 0, lv = 0;
+    if (!srb::playerStats(&sc, &lv)) return JNI_FALSE;
+    jint v[2] = {sc, lv};
+    env->SetIntArrayRegion(out, 0, 2, v);
+    return JNI_TRUE;
+}
+JNIFN(jint, nativeEffectiveButtons)(JNIEnv *, jclass) { return srb::effectiveButtons(); }
 
 JNIFN(jint, nativeCurrentChapter)(JNIEnv *, jclass) { return srb::currentChapter(); }
 JNIFN(jint, nativeVideoFrame)(JNIEnv *, jclass) { return srb::currentVideoFrame(); }

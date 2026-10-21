@@ -59,6 +59,9 @@ public final class UiBridge {
                 o.put("charging", bm.isCharging());
             }
             o.put("gameComplete", GameData.isComplete(activity));
+            boolean hd = HdPack.installed(activity);
+            o.put("hdInstalled", hd);
+            o.put("hdSizeMb", hd ? HdPack.sizeBytes(activity) >> 20 : 0);
             o.put("scores", GameData.highScores(activity));
             o.put("soundtrackDir", GameData.soundtrackDir(activity).getAbsolutePath());
             JSONArray slots = new JSONArray();

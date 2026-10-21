@@ -32,6 +32,8 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
     private Settings settings;
     private GLSurfaceView glView;
     private GameRenderer renderer;
+    private HdPack hdPack;      // HD video add-on (null when off or not installed)
+    private HdVideo hdVideo;
     private WebView menu;
     private FrameLayout root;
     private EmuThread emu;
@@ -74,6 +76,13 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
         glView = new GLSurfaceView(this);
         glView.setEGLContextClientVersion(3);
         renderer = new GameRenderer(getAssets());
+        if (settings.flag("hdVideo")) {
+            hdPack = HdPack.load(this);
+            if (hdPack != null) {
+                hdVideo = new HdVideo(hdPack.video);
+                renderer.setHd(new HdCompositor(hdPack, hdVideo));
+            }
+        }
         glView.setRenderer(renderer);
         glView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         root.addView(glView, new FrameLayout.LayoutParams(-1, -1));
@@ -127,6 +136,7 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
                     fail("No se pudo iniciar el juego.");
                     return;
                 }
+                if (hdPack != null) NativeBridge.nativeSetHdChapters(hdPack.mask);
                 emu = new EmuThread(this);
                 activeEmu = emu;
             }
@@ -440,6 +450,7 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
     protected void onPause() {
         super.onPause();
         glView.onPause();
+        if (hdVideo != null) hdVideo.setActive(false);
         menu.onPause();
         menu.pauseTimers();
         touch.releaseAll();
@@ -480,6 +491,7 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
     @Override
     protected void onDestroy() {
         stopSession();
+        if (hdVideo != null) hdVideo.release();
         menu.destroy();
         super.onDestroy();
     }

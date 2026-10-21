@@ -45,6 +45,14 @@ public final class NativeBridge {
     public static native boolean nativeLoadState(byte[] state);
     public static native void nativeSaveSram();
     public static native int nativeCopyFrame(ByteBuffer dst, int[] info);
+    /** info = {width, height, hdOverlay, track, audioSample, keyColorRgb565}. */
+    // HD video add-on
+    public static native void nativeSetHdOverlay(boolean on);
+    public static native void nativeSetHdChapters(byte[] mask);
+    /** out = {score, lives}; false when there is no player on screen. */
+    public static native boolean nativePlayerStats(int[] out);
+    /** Buttons the game is getting this frame (pad + automatic QTE). */
+    public static native int nativeEffectiveButtons();
     public static native int nativeCurrentChapter();
     public static native int nativeVideoFrame();
     public static native int nativeRumble();
