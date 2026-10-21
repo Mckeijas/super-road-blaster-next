@@ -60,8 +60,46 @@
     }
     return (S.thumbBase || '') + pad3(id) + '.png';
   };
-  const hasClip = () => false;
-  const clip = () => '';
+  // Moving previews: ~5.5 s of each scene recorded on the device while the scenes are prepared,
+  // stored as a grid of frames in one JPEG and played on a <canvas>.
+  const hasClip = (id) => !!(S.byId && S.byId[id] && S.byId[id].clipFrames > 0);
+  const clipHtml = (id) => {
+    if (!hasClip(id)) return '';
+    Clips.start();
+    return '<canvas class="clip" width="256" height="213" data-clip="' + id + '"></canvas>';
+  };
+  const Clips = {
+    cache: [], timer: 0,
+    img(id) {
+      let e = this.cache.find((x) => x.id === id);
+      if (e) { this.cache.splice(this.cache.indexOf(e), 1); this.cache.push(e); return e.img; }
+      const img = new Image();
+      img.src = (S.clipBase || '') + pad3(id) + '.jpg';
+      this.cache.push({ id, img });
+      while (this.cache.length > 3) { const old = this.cache.shift(); old.img.src = ''; }   // decoded sheets are big
+      return img;
+    },
+    start() { if (!this.timer) this.timer = setInterval(() => this.tick(), 30); },
+    tick() {
+      const els = document.querySelectorAll('canvas.clip');
+      if (!els.length) { clearInterval(this.timer); this.timer = 0; return; }
+      const now = performance.now();
+      els.forEach((cv) => {
+        const c = S.byId[+cv.dataset.clip];
+        if (!c) return;
+        const img = this.img(c.id);
+        if (!img.complete || !img.naturalWidth) return;
+        if (!cv._t0) cv._t0 = now;
+        const i = Math.floor((now - cv._t0) / 1000 * c.clipFps) % c.clipFrames;
+        if (i === cv._i) return;
+        cv._i = i;
+        const cols = c.clipCols || 8, rows = Math.ceil(c.clipFrames / cols);
+        const w = img.naturalWidth / cols, h = img.naturalHeight / rows;
+        cv.getContext('2d').drawImage(img, (i % cols) * w, Math.floor(i / cols) * h, w, h, 0, 0, cv.width, cv.height);
+        if (!cv._on) { cv._on = true; cv.classList.add('on'); }
+      });
+    },
+  };
 
   // ================================================================ sounds
   const Sfx = {
@@ -401,7 +439,7 @@
   function heroShot(id, kicker, title, text, chips) {
     const t = thumb(id);
     const media = t ? '<img class="kb" src="' + t + '">' : '<div class="noart"></div>';
-    return '<div class="shot">' + (hasClip(id) ? '<img src="' + thumb(id) + '" style="position:absolute;inset:0">' : '') + media +
+    return '<div class="shot">' + media + clipHtml(id) +
       '<div class="cap"><div class="kicker">' + esc(kicker) + '</div><h2>' + esc(title) + '</h2>' +
       (text ? '<p>' + esc(text) + '</p>' : '') + (chips ? '<div class="meta">' + chips + '</div>' : '') + '</div></div>';
   }
@@ -573,15 +611,11 @@
     box.innerHTML = '<div class="shot"><img src="' + thumb(id) + '" style="position:absolute;inset:0"><div class="cap"><div class="kicker">' +
       esc(c.level ? 'Nivel ' + c.level : 'Prólogo') + '</div><h2>' + esc(c.title.replace(/^Nivel \d · /, '')) + '</h2><div class="meta">' + chips +
       '</div><p style="margin-top:.8em">' + (c.hasState ? 'Ⓐ Jugar desde aquí' : 'Escena no disponible') + '</p></div></div>';
-    // load the moving preview a moment later, so fast scrolling stays smooth
+    // start the moving preview a moment later, so fast scrolling stays smooth
     prevTimer = setTimeout(() => {
       const shot = $('#sprev .shot');
-      if (!shot || prevId !== id || !c.hasState) return;
-      const v = document.createElement('video');
-      v.src = clip(id);
-      v.style.cssText = 'position:absolute;inset:0;opacity:0;transition:opacity .4s';
-      shot.insertBefore(v, shot.querySelector('.cap'));
-      wireVideo(v);
+      if (!shot || prevId !== id || !c.hasState || !hasClip(id)) return;
+      shot.querySelector('.cap').insertAdjacentHTML('beforebegin', clipHtml(id));
     }, 180);
   }
 

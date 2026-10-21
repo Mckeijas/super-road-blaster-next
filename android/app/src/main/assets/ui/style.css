@@ -438,3 +438,8 @@ body.minimode .mini { display: flex; position: fixed; inset: 0; z-index: 10; fle
 .rec.top .pos { color: var(--sun3); }
 .rec.top .nm, .rec.top .sc { color: #fff; text-shadow: 0 0 1.2vh var(--sun1), 0 0 3vh rgba(255,45,111,0.6); }
 .recnote { margin-top: calc(var(--u) * 1.6); color: var(--muted); font-size: calc(var(--u) * 1.25); line-height: 1.5; }
+
+/* v1.7.2 · moving scene previews (canvas over the thumbnail) */
+.shot canvas.clip { position: absolute; inset: 0; object-fit: cover; opacity: 0; transition: opacity .45s;
+  animation: kenburns 14s ease-in-out infinite alternate; }
+.shot canvas.clip.on { opacity: 1; }

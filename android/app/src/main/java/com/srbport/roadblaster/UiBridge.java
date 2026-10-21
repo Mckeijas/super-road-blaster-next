@@ -45,9 +45,19 @@ public final class UiBridge {
                 int id = c.optInt("id", -1);
                 c.put("hasState", GameData.sceneStateFile(activity, id).exists());
                 c.put("hasThumb", GameData.sceneThumbFile(activity, id).exists());
+                File clipInfo = new File(GameData.scenesDir(activity), String.format(Locale.ROOT, "clips/%03d.txt", id));
+                if (clipInfo.exists()) {   // "frames fps columns" of the moving preview
+                    String[] f = new String(GameData.readFile(clipInfo)).trim().split("\\s+");
+                    if (f.length >= 3) {
+                        c.put("clipFrames", Integer.parseInt(f[0]));
+                        c.put("clipFps", Double.parseDouble(f[1]));
+                        c.put("clipCols", Integer.parseInt(f[2]));
+                    }
+                }
             }
             o.put("chapters", chapters);
             o.put("thumbBase", "file://" + new File(GameData.scenesDir(activity), "thumbs").getAbsolutePath() + "/");
+            o.put("clipBase", "file://" + new File(GameData.scenesDir(activity), "clips").getAbsolutePath() + "/");
             o.put("scenesReady", GameImporter.scenesReady(activity));
             o.put("import", GameImporter.status());
             o.put("hasResume", GameData.resumeFile(activity).exists());

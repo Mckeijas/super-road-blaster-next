@@ -36,6 +36,7 @@ public final class GameImporter {
     private static final Pattern FILE = Pattern.compile("(?i)^.*?(\\.sfc|\\.smc|\\.msu|-(\\d{1,3})\\.pcm)$");
     private static final int GEN_FRAMES_ESTIMATE = 57000;   // whole adventure, ~19 minutes at 50 Hz
 
+    private static final String SCENES_VERSION = "2";
     private static volatile String phase = "idle";
     private static volatile int percent;
     private static volatile String message = "";
@@ -62,7 +63,13 @@ public final class GameImporter {
 
     /** True when the scene selector data has been generated for the imported game. */
     public static boolean scenesReady(Context ctx) {
-        return new File(GameData.scenesDir(ctx), "ready").exists();
+        // "2" = scenes with moving previews (v1.7.2); older data is rebuilt once
+        File f = new File(GameData.scenesDir(ctx), "ready");
+        try {
+            return f.exists() && new String(GameData.readFile(f), StandardCharsets.UTF_8).trim().compareTo(SCENES_VERSION) >= 0;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /** Import a .zip chosen by the user, then generate the scenes. */
@@ -309,7 +316,7 @@ public final class GameImporter {
                 NativeBridge.nativeGenEnd();
             }
         }
-        GameData.writeFile(new File(out, "ready"), "1".getBytes(StandardCharsets.UTF_8));
+        GameData.writeFile(new File(out, "ready"), SCENES_VERSION.getBytes(StandardCharsets.UTF_8));
         Log.i(TAG, "scenes ready");
     }
 
