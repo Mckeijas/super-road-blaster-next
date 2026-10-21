@@ -94,7 +94,7 @@ public final class TouchControls extends View {
         rightX = leftX + steerR * 2.5f;
         steerY = h - steerR - u * 0.10f;
         btnR = u * 0.085f;
-        float cx = w - u * 0.25f, cy = h - u * 0.25f, d = btnR * 1.3f;   // diamond like the Odin
+        float cx = w - u * 0.25f, cy = h - u * 0.25f, d = btnR * 1.6f;   // diamond like the Odin, small gap between A and B
         accX = cx + d;                     // "B": right position
         accY = cy;
         brkX = cx;                         // "A": bottom position
@@ -165,8 +165,8 @@ public final class TouchControls extends View {
         if (Math.abs(y - steerY) < steerR * 1.6f && x < rightX + steerR * 1.5f) {
             m |= x < (leftX + rightX) / 2f ? NativeBridge.BTN_LEFT : NativeBridge.BTN_RIGHT;
         }
-        if (Math.hypot(x - accX, y - accY) < btnR * 1.25f) m |= NativeBridge.BTN_A;
-        if (Math.hypot(x - brkX, y - brkY) < btnR * 1.25f) m |= NativeBridge.BTN_B;
+        if (Math.hypot(x - accX, y - accY) < btnR * 1.12f) m |= NativeBridge.BTN_A;
+        if (Math.hypot(x - brkX, y - brkY) < btnR * 1.12f) m |= NativeBridge.BTN_B;
         return m;
     }
 
