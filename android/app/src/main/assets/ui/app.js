@@ -587,7 +587,7 @@
   function devRow() {
     const on = setting('dev') === '1';
     return '<div class="opt action dev' + (on ? ' on' : '') + '" data-f data-act="dev"><div class="lbl">Desarrollador<small>' +
-      (on ? 'Activado: Guardar y Cargar partida en el menú de pausa.' : 'Herramientas internas.') +
+      'Herramientas internas.' +
       '</small></div><div class="val">' + (on ? 'ON' : '') + '</div></div>';
   }
   function devPress(el) {
@@ -598,8 +598,8 @@
     if (dev.n < 5) { Sfx.play('error', 0.4); return; }   // looks like a locked button: no hint of a count
     dev.n = 0;
     setSetting('dev', on ? '0' : '1');
-    if (!on) { Sfx.unlock(); toast('Modo desarrollador activado: Guardar / Cargar partida en la pausa'); }
-    else { Sfx.play('back'); toast('Modo desarrollador desactivado'); }
+    if (!on) Sfx.unlock();
+    else Sfx.play('back');
     el.outerHTML = devRow();
     const nel = $('.opt.dev');
     if (nel && !on) nel.classList.add('unlocked');
