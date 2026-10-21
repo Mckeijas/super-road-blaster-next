@@ -30,6 +30,8 @@ public final class Settings {
         // Controls
         DEFAULTS.put("layout", "snes");        // snes (by position) | xbox (by label)
         DEFAULTS.put("rumble", "1");
+        DEFAULTS.put("touch", "auto");         // auto | on | off  (floating touch buttons)
+        DEFAULTS.put("touchAlpha", "0.2");     // opacity of the touch buttons
         // Interface
         DEFAULTS.put("uiSound", "1");          // menu sound effects
         DEFAULTS.put("intro", "1");            // animated title when the app opens

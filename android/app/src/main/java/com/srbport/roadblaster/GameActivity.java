@@ -33,8 +33,11 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
     private GLSurfaceView glView;
     private GameRenderer renderer;
     private WebView menu;
+    private FrameLayout root;
     private EmuThread emu;
     private final PadInput pad = new PadInput();
+    private TouchControls touch;
+    private volatile int touchMask;
     private boolean menuOpen;
     private boolean movieMode;
     private boolean started;
@@ -55,7 +58,7 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
         settings = new Settings(this);
         vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
 
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
         glView = new GLSurfaceView(this);
         glView.setEGLContextClientVersion(3);
         renderer = new GameRenderer(getAssets());
@@ -63,10 +66,24 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
         glView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         root.addView(glView, new FrameLayout.LayoutParams(-1, -1));
 
-        menu = new WebView(this);
-        WebUi.setup(menu, new UiBridge(this, settings, this), "pause.html");
-        menu.setVisibility(View.GONE);
-        root.addView(menu, new FrameLayout.LayoutParams(-1, -1));
+        touch = new TouchControls(this, new TouchControls.Listener() {
+            @Override public void onTouchButtons(int mask) {
+                touchMask = mask;
+                pushButtons();
+            }
+            @Override public void onTouchStart() {
+                if (!started) return;
+                if (inLevel()) { openMenu(true); return; }
+                // outside levels START belongs to the game (title screen, high scores)
+                touchMask |= NativeBridge.BTN_START;
+                pushButtons();
+                glView.postDelayed(() -> { touchMask &= ~NativeBridge.BTN_START; pushButtons(); }, 150);
+            }
+            @Override public void onTouchPause() { openMenu(false); }
+        });
+        root.addView(touch, new FrameLayout.LayoutParams(-1, -1));
+
+        createMenu();
         setContentView(root);
         hideSystemUi();
 
@@ -139,6 +156,9 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
         NativeBridge.nativeSetOption(NativeBridge.OPT_SFX_VOLUME, settings.num("sfxVol", 100) / 100f);
         pad.setLayout(settings.get("layout"));
         renderer.configure(settings.get("filter"), settings.flag("color"), settings.get("aspect"));
+        String touchMode = settings.get("touch");
+        float touchAlpha = settings.num("touchAlpha", 0.2f);
+        runOnUiThread(() -> touch.configure(touchMode, touchAlpha, movieMode));
         currentSpeed = -1f;
         updateSpeed();
     }
@@ -227,7 +247,8 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
             return true;
         }
         if (pad.onKey(e)) {
-            if (started) NativeBridge.nativeSetButtons(pad.mask());
+            touch.onPhysicalInput();
+            pushButtons();
             updateSpeed();
             return true;
         }
@@ -237,11 +258,33 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent e) {
         if (!menuOpen && pad.onMotion(e)) {
-            if (started) NativeBridge.nativeSetButtons(pad.mask());
+            touch.onPhysicalInput();
+            pushButtons();
             updateSpeed();
             return true;
         }
         return super.dispatchGenericMotionEvent(e);
+    }
+
+    /** Physical controls and touch buttons together. */
+    private void pushButtons() {
+        if (started && !menuOpen) NativeBridge.nativeSetButtons(pad.mask() | touchMask);
+    }
+
+    /** (Re)creates the pause menu WebView, also after its render process died. */
+    private void createMenu() {
+        if (menu != null) {
+            root.removeView(menu);
+            menu.destroy();
+        }
+        menu = new WebView(this);
+        WebUi.setup(menu, new UiBridge(this, settings, this), "pause.html", () -> {
+            boolean wasOpen = menuOpen;
+            createMenu();
+            if (wasOpen && emu != null) { menuOpen = false; renderer.setPaused(false); emu.setPausedState(false); openMenu(false); }
+        });
+        menu.setVisibility(View.GONE);
+        root.addView(menu, new FrameLayout.LayoutParams(-1, -1));
     }
 
     // --- pause menu -------------------------------------------------------------
@@ -250,6 +293,8 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
         if (menuOpen || emu == null) return;
         menuOpen = true;
         pad.clear();
+        touch.releaseAll();
+        touchMask = 0;
         NativeBridge.nativeSetButtons(0);
         emu.setPausedState(true);
         renderer.setPaused(true);
@@ -378,6 +423,10 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
     protected void onPause() {
         super.onPause();
         glView.onPause();
+        menu.onPause();
+        menu.pauseTimers();
+        touch.releaseAll();
+        touchMask = 0;
         if (emu != null) {
             emu.setPausedState(true);
             emu.post(() -> {
@@ -398,6 +447,8 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
     @Override
     protected void onResume() {
         super.onResume();
+        menu.resumeTimers();
+        menu.onResume();
         glView.onResume();
         hideSystemUi();
         if (emu != null && !menuOpen) emu.setPausedState(false);

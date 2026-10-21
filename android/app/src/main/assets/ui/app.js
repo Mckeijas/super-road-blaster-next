@@ -14,7 +14,7 @@
   function makeMockBridge() {
     // Browser preview: settings in localStorage, data from relative files.
     const defaults = { filter: 'hd', color: '1', aspect: '43', audio: 'enhanced', msuVol: '100', sfxVol: '100',
-      qte: '0', lives: '0', slowSpeed: '0.5', slowmo: '0', hud: '1', layout: 'snes', rumble: '1', uiSound: '1', intro: '1' };
+      qte: '0', lives: '0', slowSpeed: '0.5', slowmo: '0', hud: '1', layout: 'snes', rumble: '1', uiSound: '1', intro: '1', touch: 'auto', touchAlpha: '0.2' };
     let chapters = [];
     const x = new XMLHttpRequest();
     x.open('GET', '../game/chapters.json', false);
@@ -116,6 +116,8 @@
     intro: { label: 'Intro al abrir', desc: 'Pantalla de título animada al arrancar la app.', values: [['0', 'No'], ['1', 'Sí']], sw: true },
     layout: { label: 'Distribución de botones', desc: '', values: [['snes', 'Por posición (SNES)'], ['xbox', 'Por etiqueta']] },
     rumble: { label: 'Vibración', desc: 'Vibra con los impactos del anime.', values: [['0', 'No'], ['1', 'Sí']], sw: true },
+    touch: { label: 'Controles táctiles', desc: '', values: [['auto', 'Automático'], ['on', 'Siempre'], ['off', 'Desactivados']] },
+    touchAlpha: { label: 'Transparencia de los botones', desc: 'Cuanto más transparentes, menos tapan la imagen.', values: [['0.12', 'Muy alta'], ['0.2', 'Alta'], ['0.3', 'Media'], ['0.45', 'Baja']] },
   };
   const FILTER_DESC = {
     original: 'Píxeles nítidos y limpios, tal como los dibuja la SNES, sin parpadeo al escalar.',
@@ -123,6 +125,11 @@
     hd: 'Limpia el ruido del códec MSU-1, reconstruye bordes con AMD FSR y afina el trazo del anime.',
     hd_strong: 'Más agresiva: elimina los bloques de compresión en escenas oscuras y marca más la línea.',
     crt: 'Líneas de barrido y máscara de fósforo de un televisor de tubo.',
+  };
+  const TOUCH_DESC = {
+    auto: 'Aparecen al tocar la pantalla y se ocultan al usar los botones físicos.',
+    on: 'Botones flotantes siempre visibles (móviles sin mando).',
+    off: 'Solo botones físicos del dispositivo o de un mando.',
   };
   const AUDIO_DESC = {
     enhanced: 'Pistas remasterizadas: sin saturación, ruido reducido y volumen equilibrado entre escenas.',
@@ -150,6 +157,7 @@
     let desc = o.desc;
     if (key === 'filter') desc = FILTER_DESC[v] || '';
     if (key === 'audio') desc = AUDIO_DESC[v] || '';
+    if (key === 'touch') desc = TOUCH_DESC[v] || '';
     return '<div class="opt" data-f data-opt="' + key + '"><div class="lbl">' + esc(o.label) +
       '<small>' + esc(desc) + '</small></div><div class="val">' + val + '</div></div>';
   }
@@ -208,7 +216,6 @@
       add({ id: 'graphics', ico: 'screen', label: 'Gráficos', panel: 'graphics' });
       add({ id: 'audio', ico: 'wave', label: 'Audio', panel: 'audio' });
       add({ id: 'controls', ico: 'pad', label: 'Controles', panel: 'controls' });
-      add({ id: 'load', ico: 'disk', label: 'Partidas guardadas', panel: 'slots', slotMode: 'load' });
       add({ id: 'quit', ico: 'power', label: 'Salir', act: () => Bridge.action('quit', '') });
     }
   }
@@ -233,8 +240,8 @@
   }
   function sceneList() {
     const t = sceneTabs()[ui.tab];
-    const all = S.chapters.filter((c) => t.filter(c));
-    return { story: all.filter((c) => c.kind !== 'crash'), crash: all.filter((c) => c.kind === 'crash') };
+    // crash scenes are not offered in the selector: only the route through each level
+    return { story: S.chapters.filter((c) => t.filter(c) && c.kind !== 'crash'), crash: [] };
   }
 
   // ---------------------------------------------------------------- render
@@ -256,7 +263,6 @@
     p.innerHTML = panelHtml(sec);
     if (animate) { p.classList.remove('enter'); void p.offsetWidth; p.classList.add('enter'); }
     panelKey = sec.id + ':' + ui.sub + ':' + ui.tab + ':' + ui.compare;
-    focusables().forEach((el, i) => { el.onclick = () => { ui.zone = 'panel'; ui.pidx = i; updateFocus(); press('A'); }; });
     $$('video', p).forEach(wireVideo);
     if (P(sec) === 'graphics' && !PAUSE) drawPreview();
   }
@@ -306,6 +312,38 @@
   }
 
   function focusables() { return $$('main.panel [data-f]'); }
+
+  // ---------------------------------------------------------------- touch
+  // One delegated listener per area: option rows are replaced every time they change, so
+  // handlers attached to the rows themselves would be lost after the first tap.
+  function onPanelTap(e) {
+    if (mini || ui.intro) return;
+    const tab = e.target.closest('[data-tab]');
+    if (tab) {
+      const d = +tab.dataset.tab - ui.tab;
+      if (d) { switchTab(d); ui.zone = 'panel'; ui.pidx = 0; updateFocus(); }
+      return;
+    }
+    const el = e.target.closest('[data-f]');
+    if (!el) return;
+    const i = focusables().indexOf(el);
+    if (i < 0) return;
+    ui.zone = 'panel';
+    ui.pidx = i;
+    updateFocus();
+    if (el.dataset.opt) {
+      const arrows = $$('.arr', el);
+      const a = e.target.closest('.arr');
+      cycle(el.dataset.opt, a && arrows.indexOf(a) === 0 ? -1 : 1);
+      updateFooter();
+      return;
+    }
+    press('A');
+  }
+  function onFooterTap(e) {
+    const k = e.target.closest('[data-tok]');
+    if (k) press(k.dataset.tok);
+  }
 
   function wireVideo(v) {
     v.muted = true;
@@ -413,14 +451,14 @@
   function panelControls() {
     const lay = setting('layout') === 'xbox';
     const acc = lay ? 'A' : 'B (derecha)', brk = lay ? 'B' : 'A (abajo)';
-    return '<div class="section-title">Controles · AYN Odin 2 Portal</div><div class="opts stagger">' + optRow('layout') + optRow('rumble') + optRow('intro') + '</div>' +
+    return '<div class="section-title">Controles</div><div class="opts stagger">' + optRow('layout') + optRow('touch') + optRow('touchAlpha') + optRow('rumble') + optRow('intro') + '</div>' +
       '<div class="keys">' +
       '<span class="k">Cruceta / stick</span><span>Girar a izquierda o derecha</span>' +
       '<span class="k">Botón ' + acc + '</span><span>Acelerar · turbo (A de SNES)</span>' +
       '<span class="k">Botón ' + brk + '</span><span>Frenar (B de SNES)</span>' +
       '<span class="k">L2 · R2</span><span>Mantener: cámara lenta · avance rápido ×2</span>' +
       '<span class="k">R3</span><span>Mostrar u ocultar el marcador</span>' +
-      '<span class="k">Atrás</span><span>Menú de pausa</span></div>';
+      '<span class="k">Atrás · ❚❚ táctil</span><span>Menú de pausa</span></div>';
   }
 
   function panelScenes() {
@@ -498,10 +536,11 @@
 
   function updateFooter() {
     const sec = SECTIONS[ui.sec];
-    let k = '<span><span class="key a">A</span>Aceptar</span><span><span class="key b">B</span>' + (ui.zone === 'menu' && PAUSE ? 'Volver al juego' : 'Atrás') + '</span>';
-    if (ui.zone === 'panel' && $('main.panel .opt.focus[data-opt]')) k += '<span><span class="key">◀ ▶</span>Cambiar</span>';
-    if (P(sec) === 'scenes') k += '<span><span class="key">L</span><span class="key">R</span>Nivel</span>';
-    if (P(sec) === 'graphics' && !PAUSE) k += '<span><span class="key y">Y</span>Comparar</span><span><span class="key x">X</span>Otra imagen</span>';
+    let k = '<span data-tok="A"><span class="key a">A</span>Aceptar</span><span data-tok="B"><span class="key b">B</span>' + (ui.zone === 'menu' && PAUSE ? 'Volver al juego' : 'Atrás') + '</span>';
+    if (ui.zone === 'panel' && $('main.panel .opt.focus[data-opt]')) k += '<span data-tok="RIGHT"><span class="key">◀ ▶</span>Cambiar</span>';
+    if (P(sec) === 'scenes') k += '<span><span class="key" data-tok="L">L</span><span class="key" data-tok="R">R</span>Nivel</span>';
+    if (P(sec) === 'graphics' && !PAUSE) k += '<span data-tok="Y"><span class="key y">Y</span>Comparar</span><span data-tok="X"><span class="key x">X</span>Otra imagen</span>';
+    if (!PAUSE) k += '<span class="ver">Mckeijas</span>';
     const html = k;
     const f = $('footer');
     if (f.dataset.h !== html) { f.innerHTML = html; f.dataset.h = html; }
@@ -666,7 +705,15 @@
   async function drawPreview() {
     const shot = document.getElementById('shot');
     if (!shot || !window.SrbFx) return;
-    if (!fxCanvas) { fxCanvas = document.createElement('canvas'); fxCanvas.id = 'fx'; }
+    if (!fxCanvas) {
+      fxCanvas = document.createElement('canvas');
+      fxCanvas.id = 'fx';
+      fxCanvas.addEventListener('webglcontextlost', (ev) => {
+        ev.preventDefault();
+        if (fxCanvas && fxCanvas.parentNode) fxCanvas.parentNode.removeChild(fxCanvas);
+        fxCanvas = null; fxInit = null; fx = null;
+      });
+    }
     if (fxCanvas.parentNode !== shot) shot.insertBefore(fxCanvas, shot.firstChild);
     const canvas = fxCanvas;
     const box = shot.getBoundingClientRect();
@@ -814,6 +861,20 @@
     if (map[e.key]) { e.preventDefault(); press(map[e.key]); }
   });
   window.addEventListener('resize', () => { updateFocus(); });
+  $('main.panel').addEventListener('click', onPanelTap);
+  $('footer').addEventListener('click', onFooterTap);
+
+  // ---------------------------------------------------------------- sleep / wake
+  // Videos and the WebGL preview are stopped while the screen is off, and the preview is
+  // rebuilt if Android took its GPU context away during sleep.
+  function sleepMedia() { $$('video').forEach((v) => { try { v.pause(); } catch (e) {} }); }
+  function wakeMedia() {
+    $$('.bg video, main.panel video').forEach((v) => { const p = v.play(); if (p && p.catch) p.catch(() => {}); });
+    if (P(SECTIONS[ui.sec]) === 'graphics' && !PAUSE) drawPreview();
+  }
+  window.srbSleep = sleepMedia;
+  window.srbWake = wakeMedia;
+  document.addEventListener('visibilitychange', () => { if (document.hidden) sleepMedia(); else if (!PAUSE) wakeMedia(); });
 
   loadState();
   ui.tab = defaultTab();

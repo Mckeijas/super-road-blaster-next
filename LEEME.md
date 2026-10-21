@@ -38,17 +38,17 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.3.0-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.4.0-release.apk`
    (≈ 1 GB: lleva dentro el vídeo).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
 
 ### Versiones y nombre de la APK
-La versión está en `android/gradle.properties` → `srbVersion=1.3.0`. **Súbela antes de cada
-build que vayas a instalar** (1.3.0 → 1.3.1 para arreglos, 1.4.0 para novedades). La APK sale
+La versión está en `android/gradle.properties` → `srbVersion=1.4.0`. **Súbela antes de cada
+build que vayas a instalar** (1.4.0 → 1.4.1 para arreglos, 1.5.0 para novedades). La APK sale
 con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
 *Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
-(1.3.0 → 10300); Android no permite instalar una versión con número menor que la instalada.
+(1.4.0 → 10400); Android no permite instalar una versión con número menor que la instalada.
 
 ### Aviso «app potencialmente insegura» (Play Protect)
 Sale con cualquier APK instalada fuera de Google Play que Google no conozca; no depende del
@@ -66,7 +66,7 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.3.0-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.4.0-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ## 3. El launcher
@@ -81,8 +81,7 @@ pulsa **Start** para entrar. Se puede desactivar en *Controles ▸ Intro al abri
 | Director's Mode | Ver la película completa, QTE automático/asistido, invencibilidad, cámara lenta, marcador y **selector de escenas** |
 | Gráficos | Filtro con vista previa en vivo y comparación en pantalla partida |
 | Audio | MSU-1 Enhanced / Original / Alternativa, volúmenes, sonidos del menú |
-| Controles | Distribución de botones, vibración, intro |
-| Partidas guardadas | Cargar una de las 3 ranuras |
+| Controles | Distribución de botones, **controles táctiles**, vibración, intro |
 | Salir | Cerrar la app |
 
 Fondo con montaje de escenas del anime, vistas previas en vídeo, cursor animado y sonidos
@@ -95,8 +94,8 @@ de menú sintetizados para el port. Fuente de menús: Kaushan Script.
 - **Cámara lenta**: permanente, o **mantén L2** durante la partida. El audio se estira sin
   cambiar el tono. **R2** = avance rápido ×2.
 - **Marcador**: ocultar puntos y flechas (también con **R3**).
-- **Selector de escenas**: los 119 capítulos jugables con mapa de niveles (L/R), recorrido
-  y choques por separado, y vista previa en vídeo.
+- **Selector de escenas**: los tramos de recorrido de cada nivel, con mapa de niveles (L/R)
+  y vista previa en vídeo.
 
 ### Gráficos · restauración HD
 - **Restauración HD**: limpieza del ruido del códec MSU-1 → reescalado con reconstrucción
@@ -127,6 +126,13 @@ Los que falten se toman del original. **La duración debe coincidir con la origi
 | Atrás | Menú completo: guardar o cargar (3 ranuras), escenas, Director's Mode, gráficos, audio |
 | L2 / R2 (mantener) | Cámara lenta / avance rápido |
 | R3 | Mostrar u ocultar marcador |
+
+### Controles táctiles (móviles)
+En *Controles ▸ Controles táctiles*: **Automático** (aparecen al tocar la pantalla y se ocultan
+al usar un botón físico), **Siempre** o **Desactivados**. Son botones flotantes muy
+transparentes: cruceta a la izquierda, **A** (acelerar) y **B** (frenar) a la derecha,
+**START** abajo y **❚❚** (menú de pausa) arriba a la derecha. La transparencia se ajusta en
+*Transparencia de los botones*. Todos los menús funcionan también tocando la pantalla.
 
 En la pantalla de título y en la de récords, Start funciona como en el juego original.
 En *Controles* puedes cambiar a «Por etiqueta» si prefieres que el botón con la letra A sea

@@ -21,7 +21,7 @@ public final class LauncherActivity extends Activity implements UiBridge.Host {
         web = new WebView(this);
         web.setBackgroundColor(0xFF07040C);
         setContentView(web);
-        WebUi.setup(web, new UiBridge(this, settings, this), "launcher.html");
+        WebUi.setup(web, new UiBridge(this, settings, this), "launcher.html", this::rebuild);
         web.setBackgroundColor(0xFF07040C);
         hideSystemUi();
     }
@@ -61,11 +61,33 @@ public final class LauncherActivity extends Activity implements UiBridge.Host {
     @Override
     public JSONObject uiExtraState() { return null; }
 
+    /** The page's render process died: throw the WebView away and start the screen again. */
+    private void rebuild() {
+        if (isFinishing() || isDestroyed()) return;
+        try {
+            ((android.view.ViewGroup) web.getParent()).removeView(web);
+            web.destroy();
+        } catch (Exception ignored) {
+        }
+        recreate();
+    }
+
+    @Override
+    protected void onPause() {
+        // stop video, animations and timers while the screen is off or another app is on top
+        web.evaluateJavascript("window.srbSleep && window.srbSleep()", null);
+        web.onPause();
+        web.pauseTimers();
+        super.onPause();
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+        web.resumeTimers();
+        web.onResume();
         hideSystemUi();
-        web.evaluateJavascript("window.srbRefresh && window.srbRefresh()", null);
+        web.evaluateJavascript("window.srbRefresh && window.srbRefresh(); window.srbWake && window.srbWake()", null);
     }
 
     @Override

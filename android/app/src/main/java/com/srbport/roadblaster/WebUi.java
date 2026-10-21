@@ -14,6 +14,15 @@ public final class WebUi {
 
     @SuppressLint("SetJavaScriptEnabled")
     public static void setup(WebView wv, UiBridge bridge, String page) {
+        setup(wv, bridge, page, null);
+    }
+
+    /**
+     * onGone runs if the WebView's render process dies (it can happen after the device
+     * sleeps with video / WebGL on screen). Without handling it Android kills the whole app.
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    public static void setup(WebView wv, UiBridge bridge, String page, Runnable onGone) {
         WebSettings s = wv.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -25,7 +34,14 @@ public final class WebUi {
         wv.setFocusableInTouchMode(false);
         wv.setVerticalScrollBarEnabled(false);
         wv.setHorizontalScrollBarEnabled(false);
-        wv.setWebViewClient(new WebViewClient());
+        wv.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                android.util.Log.w("SRBPort", "WebView render process gone (crash=" + detail.didCrash() + ")");
+                if (onGone != null) view.post(onGone);
+                return true; // handled: keep the app alive
+            }
+        });
         wv.setWebChromeClient(new WebChromeClient());
         wv.addJavascriptInterface(bridge, "Android");
         wv.loadUrl("file:///android_asset/ui/" + page);
