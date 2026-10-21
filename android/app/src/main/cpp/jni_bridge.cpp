@@ -178,6 +178,7 @@ JNIFN(jboolean, nativePlayerStats)(JNIEnv *env, jclass, jintArray out) {
     return JNI_TRUE;
 }
 JNIFN(jint, nativeEffectiveButtons)(JNIEnv *, jclass) { return srb::effectiveButtons(); }
+JNIFN(jint, nativePromptsAt)(JNIEnv *, jclass, jint track, jint sample) { return srb::promptsAt(track, sample); }
 
 JNIFN(jint, nativeCurrentChapter)(JNIEnv *, jclass) { return srb::currentChapter(); }
 JNIFN(jint, nativeVideoFrame)(JNIEnv *, jclass) { return srb::currentVideoFrame(); }

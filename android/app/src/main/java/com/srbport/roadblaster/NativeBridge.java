@@ -53,6 +53,8 @@ public final class NativeBridge {
     public static native boolean nativePlayerStats(int[] out);
     /** Buttons the game is getting this frame (pad + automatic QTE). */
     public static native int nativeEffectiveButtons();
+    /** Prompts the game wants at that point (bit 0 left, 1 right, 2 brake, 3 accelerate). */
+    public static native int nativePromptsAt(int track, int audioSample);
     public static native int nativeCurrentChapter();
     public static native int nativeVideoFrame();
     public static native int nativeRumble();

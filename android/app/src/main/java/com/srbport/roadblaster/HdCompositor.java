@@ -32,6 +32,8 @@ final class HdCompositor {
     private final float[] off = new float[2];
     private int oesTex, progOes, progSprite, progDim;
     private int texHelp, texPause, texScreen, texUp, texMid, texDown;
+    private int texIndClean, texIndLeft, texIndRight, texIndBrake, texIndAccel;
+    private float floatAlpha;   // prompt screen shown on its own when the dashboard is not on screen
     private int lcdScore = Integer.MIN_VALUE, lcdLives = Integer.MIN_VALUE;
     private Bitmap screenBg;
     private final int[] stats = new int[2];
@@ -82,6 +84,13 @@ final class HdCompositor {
         texUp = upload(pack.bitmap("lever_up.png"));
         texMid = upload(pack.bitmap("lever_mid.png"));
         texDown = upload(pack.bitmap("lever_down.png"));
+        if (pack.hasIndicators) {
+            texIndClean = upload(pack.bitmap("ind_clean.png"));
+            texIndLeft = upload(pack.bitmap("ind_left.png"));
+            texIndRight = upload(pack.bitmap("ind_right.png"));
+            texIndBrake = upload(pack.bitmap("ind_brake.png"));
+            texIndAccel = upload(pack.bitmap("ind_accel.png"));
+        }
         ok = progOes != 0 && progSprite != 0;
     }
 
@@ -120,11 +129,19 @@ final class HdCompositor {
 
         GLES30.glEnable(GLES30.GL_BLEND);
         GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_ALPHA);
+        // the game's own prompts (the film's green screen follows the iOS timing, which is
+        // not always the game's): left / right / brake / accelerate
+        int prompts = pack.hasIndicators ? NativeBridge.nativePromptsAt(track, audioPos) : 0;
         if (!Double.isNaN(t) && pack.dashboardAt(t, off)) {
             // 2. iOS dashboard, dressed for this game
             float ox = off[0], oy = off[1];
+            floatAlpha = 0f;
             sprite(texHelp, pack.help, ox, oy, 0, 0, 1, 1, null);
             sprite(texPause, pack.pause, ox, oy, 0, 0, 1, 1, null);
+            if (pack.hasIndicators) {
+                sprite(texIndClean, pack.indicators, ox, oy, 0, 0, 1, 1, null);
+                drawPrompts(prompts, ox, oy, 1f);
+            }
             updateStats();
             if (score >= 0) {
                 refreshScreen();
@@ -132,6 +149,13 @@ final class HdCompositor {
             }
             int lever = (buttons & NativeBridge.BTN_A) != 0 ? texUp : (buttons & NativeBridge.BTN_B) != 0 ? texDown : texMid;
             sprite(lever, pack.lever, ox, oy, 0, 0, 1, 1, null);
+        } else if (pack.hasIndicators) {
+            // no dashboard in this shot: the prompt screen appears on its own while needed
+            floatAlpha = Math.max(0f, Math.min(1f, floatAlpha + (prompts != 0 ? 0.25f : -0.12f)));
+            if (floatAlpha > 0.01f) {
+                sprite(texIndClean, pack.indicators, 0, 0, 0, 0, 1, 1, null, floatAlpha * 0.92f);
+                drawPrompts(prompts, 0, 0, floatAlpha);
+            }
         } else if (snesTex != 0 && snesH > 0) {
             // 3. SNES HUD on its own, mapped onto the film (rows 8..198 = the video area)
             float r = ((key >> 11) & 31) / 31f, g = ((key >> 5) & 63) / 63f, b = (key & 31) / 31f;
@@ -148,15 +172,30 @@ final class HdCompositor {
         GLES30.glDisable(GLES30.GL_BLEND);
     }
 
-    /** Draws a texture into a rectangle given in film pixels (x, y, w, h), moved by (dx, dy). */
+    private void drawPrompts(int prompts, float ox, float oy, float a) {
+        if (prompts == 0) return;
+        // blink like the dashboard does
+        float blink = (android.os.SystemClock.uptimeMillis() % 320) < 210 ? 1f : 0.45f;
+        a *= blink;
+        if ((prompts & 1) != 0) sprite(texIndLeft, pack.indicators, ox, oy, 0, 0, 1, 1, null, a);
+        if ((prompts & 2) != 0) sprite(texIndRight, pack.indicators, ox, oy, 0, 0, 1, 1, null, a);
+        if ((prompts & 4) != 0) sprite(texIndBrake, pack.indicators, ox, oy, 0, 0, 1, 1, null, a);
+        if ((prompts & 8) != 0) sprite(texIndAccel, pack.indicators, ox, oy, 0, 0, 1, 1, null, a);
+    }
+
     private void sprite(int tex, int[] r, float dx, float dy, float u0, float v0, float u1, float v1, float[] key) {
+        sprite(tex, r, dx, dy, u0, v0, u1, v1, key, 1f);
+    }
+
+    /** Draws a texture into a rectangle given in film pixels (x, y, w, h), moved by (dx, dy). */
+    private void sprite(int tex, int[] r, float dx, float dy, float u0, float v0, float u1, float v1, float[] key, float alpha) {
         if (tex == 0 || r[2] <= 0) return;
         float x0 = (r[0] + dx) / HdPack.FILM_W * 2f - 1f, x1 = (r[0] + dx + r[2]) / HdPack.FILM_W * 2f - 1f;
         float yTop = 1f - (r[1] + dy) / HdPack.FILM_H * 2f, yBot = 1f - (r[1] + dy + r[3]) / HdPack.FILM_H * 2f;
         GLES30.glUseProgram(progSprite);
         GLES30.glUniform4f(GLES30.glGetUniformLocation(progSprite, "uRect"), x0, yBot, x1, yTop);
         GLES30.glUniform4f(GLES30.glGetUniformLocation(progSprite, "uUv"), u0, v0, u1, v1);
-        GLES30.glUniform1f(GLES30.glGetUniformLocation(progSprite, "uAlpha"), 1f);
+        GLES30.glUniform1f(GLES30.glGetUniformLocation(progSprite, "uAlpha"), alpha);
         if (key != null) GLES30.glUniform4f(GLES30.glGetUniformLocation(progSprite, "uKey"), key[0], key[1], key[2], 1f);
         else GLES30.glUniform4f(GLES30.glGetUniformLocation(progSprite, "uKey"), 0, 0, 0, 0);
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0);

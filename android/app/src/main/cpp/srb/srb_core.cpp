@@ -671,6 +671,29 @@ void directorTick() {
 } // namespace
 
 // ===========================================================================
+// Small fixes applied to the ROM image in memory (the player's file is never changed), only
+// when every byte involved is exactly as in the released ROM.
+void romFixups(std::vector<uint8_t> &rom) {
+    static const uint8_t kA[] = {
+        0x5F, 0x5C, 0x59, 0x7A, 0x7A, 0x72, 0x19, 0x73, 0x6B, 0x63, 0x62, 0x6C, 0x7A, 0x1E,
+        0x3B, 0x2E, 0x3B, 0x7A, 0x1F, 0x3B, 0x29, 0x2E, 0x5C, 0x2A, 0x35, 0x28, 0x2E, 0x3F,
+        0x3E, 0x7A, 0x38, 0x23, 0x7A, 0x3E, 0x6E, 0x29, 0x7A, 0x33, 0x34, 0x7A, 0x68, 0x6A,
+        0x6B, 0x68, 0x5A};
+    static const uint8_t kB[] = {
+        0x5F, 0x59, 0x59, 0x7A, 0x7A, 0x7A, 0x7A, 0x7A, 0x72, 0x19, 0x73, 0x6B, 0x63, 0x62,
+        0x6C, 0x7A, 0x1E, 0x3B, 0x2E, 0x3B, 0x7A, 0x1F, 0x3B, 0x29, 0x2E, 0x5C, 0x2A, 0x35,
+        0x28, 0x2E, 0x3F, 0x3E, 0x7A, 0x38, 0x23, 0x7A, 0x17, 0x39, 0x31, 0x3F, 0x33, 0x30,
+        0x3B, 0x29, 0x7A, 0x33, 0x34, 0x7A, 0x68, 0x6A, 0x68, 0x6C, 0x5A};
+    const size_t at = 0x3CEA3, ptr = 0xFF86, to = 0x3FF80;
+    if (rom.size() != 0x40000) return;
+    for (size_t i = 0; i < sizeof kA; ++i) if (rom[at + i] != (uint8_t)(kA[i] ^ 0x5A)) return;
+    if (rom[ptr] != 0xA3 || rom[ptr + 1] != 0xCE || rom[ptr + 2] != 0xC3) return;
+    for (size_t i = 0; i < sizeof kB; ++i) if (rom[to + i] != 0) return;
+    for (size_t i = 0; i < sizeof kB; ++i) rom[to + i] = (uint8_t)(kB[i] ^ 0x5A);
+    rom[ptr] = (uint8_t)(to & 0xFF);
+    rom[ptr + 1] = (uint8_t)((to >> 8) & 0xFF);
+}
+
 bool init(const Config &cfg) {
     if (g) shutdown();
     g = new State();
@@ -687,10 +710,12 @@ bool init(const Config &cfg) {
     retro_set_input_state(inputStateCb);
     retro_init();
 
+    std::vector<uint8_t> rom = cfg.rom;
+    romFixups(rom);
     retro_game_info info{};
     info.path = cfg.romPath.empty() ? "/SuperRoadBlaster.sfc" : cfg.romPath.c_str();
-    info.data = cfg.rom.data();
-    info.size = cfg.rom.size();
+    info.data = rom.data();
+    info.size = rom.size();
     if (!retro_load_game(&info)) {
         logf("[srb] retro_load_game failed\n");
         return false;
@@ -828,6 +853,20 @@ uint8_t *wram() { return Memory.RAM; }
 
 void setHdOverlay(bool on) { if (g) g->hdOverlay = on; }
 uint16_t effectiveButtons() { return g ? effectiveMask() : 0; }
+int promptsAt(int track, int audioSample) {
+    if (!g || track < 0 || track >= (int)g->chapters.size() || audioSample < 0) return 0;
+    if (g->movieMode.load() || !g->hudVisible.load()) return 0;
+    int f = (int)(audioSample / 44100.0 * kVideoFps);
+    int m = 0;
+    for (const QteEvent &e : g->chapters[(size_t)track].events) {
+        if (f < e.start || f > e.end) continue;
+        if (e.type == "direction-left") m |= 1;
+        else if (e.type == "direction-right") m |= 2;
+        else if (e.type == "brake") m |= 4;
+        else if (e.type == "accelerate") m |= 8;
+    }
+    return m;
+}
 void setHdChapters(const std::vector<uint8_t> &mask) {
     if (!g) return;
     std::lock_guard<std::mutex> lk(g->hdMutex);

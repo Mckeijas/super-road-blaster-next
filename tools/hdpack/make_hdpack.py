@@ -10,7 +10,9 @@ Requirements: Python 3, numpy, opencv-python, ffmpeg/ffprobe in PATH.
     make_hdpack.py align   <film.mp4> <game_dir> <work>      # chapter -> film time (audio match)
     make_hdpack.py track   <film.mp4> <work> <start_s> <dur_s> # iOS dashboard presence/offset
     make_hdpack.py patches <film.mp4> <work>                  # clean "?" / pause / screen patches
+    make_hdpack.py indicators <film.mp4> <work>               # green screen: clean + prompt icons
     make_hdpack.py pack    <film.mp4> <work> <out.zip>         # hd.mp4 + hdpack.json + patches
+    make_hdpack.py update  <film.mp4> <work> <out.zip>         # same without the film (installed pack)
     make_hdpack.py all     <film.mp4> <game_dir> <work> <out.zip>
 
 How it works
@@ -40,10 +42,23 @@ PAUSE = (980, 825, 46)          # pause button
 SCREEN = (566, 856, 936, 974)   # digital screen inner area (score + lives)
 LEVER = (1050, 640, 1440, 1080) # gear lever area: covered by the app's own lever (up/mid/down)
 HEAD = (1120, 830, 1410, 940)   # lever head in its middle position (search template)
+GREEN = (512, 710, 982, 838)    # green indicator screen (arrows / brake / turbo) + margin
+VIDEO_FPS = 23.9777             # frame rate of the game's event tables (chapters.txt)
+ICON_REGION = {'left': (0.0, 0.40), 'right': (0.60, 1.0), 'brake': (0.30, 0.70), 'accel': (0.30, 0.70)}
+EVENT_ICON = {'direction-left': 'left', 'direction-right': 'right', 'brake': 'brake', 'accelerate': 'accel'}
 
 
 def run(cmd, **kw):
     return subprocess.run(cmd, check=True, **kw)
+
+
+def chapters_txt(game_dir):
+    here = os.path.dirname(os.path.abspath(__file__))
+    for p in (os.path.join(here, '..', '..', 'android', 'app', 'src', 'main', 'assets', 'game', 'chapters.txt'),
+              os.path.join(game_dir, 'chapters.txt')):
+        if os.path.exists(p):
+            return open(p).read()
+    raise SystemExit('chapters.txt not found')
 
 
 def chapters_json(game_dir):
@@ -227,6 +242,111 @@ def patches(film, work):
     print('patches', out)
 
 
+# ------------------------------------------------------------------------------- indicators
+def indicators(film, work, per_type=12):
+    """The green screen of the iOS dashboard shows the prompts (arrows, brake X, turbo) with the
+    iOS timing, which does not always match the game. Builds a clean screen and one image per
+    prompt so the app can show the game's own prompts there."""
+    al = json.load(open(os.path.join(work, 'align.json')))
+    rows = load_track(work)
+    tt = np.array([r[0] for r in rows])
+    ev, cur = {}, None
+    for line in chapters_txt(work).splitlines():
+        p = line.split()
+        if not p:
+            continue
+        if p[0] == 'C':
+            cur = p[1]
+        elif p[0] == 'E' and cur in al and al[cur]['ok'] and p[1] in EVENT_ICON:
+            ev.setdefault(EVENT_ICON[p[1]], []).append((al[cur]['start'], int(p[2]), int(p[3])))
+    x0, y0, x1, y1 = GREEN
+    w, h = x1 - x0, y1 - y0
+    crops = {}
+    for name, lst in ev.items():
+        pick = [lst[int(i)] for i in np.linspace(0, len(lst) - 1, min(per_type, len(lst)))]
+        cs = []
+        for st, a, b in pick:
+            for fr in (0.3, 0.55, 0.8):
+                t = st + (a + (b - a) * fr) / VIDEO_FPS
+                k = int(np.clip(np.searchsorted(tt, t), 0, len(rows) - 1))
+                if rows[k][1] < 0.8 or abs(tt[k] - t) > 0.05:
+                    continue
+                r = run(['ffmpeg', '-v', 'error', '-ss', '%.3f' % t, '-i', film, '-frames:v', '1', '-vf',
+                         'crop=%d:%d:%d:%d' % (w, h, x0, y0), '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-'],
+                        stdout=subprocess.PIPE)
+                f = np.frombuffer(r.stdout, np.uint8).reshape(h, w, 3)
+                M = np.float32([[1, 0, -rows[k][2]], [0, 1, -rows[k][3]]])
+                cs.append(cv2.warpAffine(f, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE))
+        crops[name] = cs
+        print('indicators %s: %d frames' % (name, len(cs)))
+    def lit(c, name):           # how much a pixel looks like the lit prompt (0..1)
+        b, g, r = [c[..., i].astype(np.float32) for i in range(3)]
+        cl = lambda x: np.clip(x, 0, 1)
+        if name in ('left', 'right'):           # pale green arrow
+            return cl((g - 170) / 40) * cl((g - np.maximum(r, b) - 40) / 30)
+        if name == 'brake':                     # red X
+            return cl((r - g - 80) / 60)
+        m = np.minimum(g, b)                    # turbo: pale cyan
+        return cl((m - 150) / 40) * cl((m - r - 30) / 30)
+
+    allc = [c for cs in crops.values() for c in cs]
+    quiet = [c for c in allc if sum(float(lit(c, k).sum()) for k in ICON_REGION) < 40]
+    medf = os.path.join(work, 'dashboard_median.png')      # from "patches": the cleanest screen
+    if os.path.exists(medf):
+        clean = cv2.imread(medf)[y0:y1, x0:x1].copy()
+    else:
+        clean = np.median(np.stack(quiet if len(quiet) >= 5 else allc), axis=0).astype(np.uint8)
+    ci = clean.astype(np.int32)
+    green = ((ci[..., 1] > ci[..., 2] + 25) & (ci[..., 1] > ci[..., 0] - 10) & (ci[..., 1] > 60)).astype(np.uint8)
+    n, lab, st, _ = cv2.connectedComponentsWithStats(green)
+    green = (lab == 1 + int(np.argmax(st[1:, 4]))).astype(np.uint8) * 255
+    green = cv2.morphologyEx(green, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+    # whole screen shape, holes included (faint leftovers of the prompts in the median)
+    cnts, _ = cv2.findContours(green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    full = np.zeros_like(green)
+    cv2.drawContours(full, [max(cnts, key=cv2.contourArea)], -1, 255, -1)
+    full = cv2.morphologyEx(full, cv2.MORPH_CLOSE, np.ones((25, 25), np.uint8))
+    hole = cv2.dilate(((full > 0) & (green == 0)).astype(np.uint8) * 255, np.ones((7, 7), np.uint8))
+    hole = cv2.erode(hole, np.ones((3, 3), np.uint8)) & cv2.erode(full, np.ones((9, 9), np.uint8))
+    clean = cv2.inpaint(clean, hole, 5, cv2.INPAINT_TELEA)
+    ci = clean.astype(np.int32)
+    green = cv2.dilate(full, np.ones((5, 5), np.uint8))
+    alpha = cv2.GaussianBlur(green.astype(np.float32) / 255, (0, 0), 1.5)
+    cv2.imwrite(os.path.join(work, 'ind_clean.png'), np.dstack([clean, (alpha * 255).astype(np.uint8)]))
+    inside = alpha > 0.5
+    info = {}
+    for name, cs in crops.items():
+        lo, hi = ICON_REGION[name]
+        reg = np.zeros((h, w), np.float32)
+        reg[:, int(lo * w):int(hi * w)] = 1
+        best, be = None, -1
+        for c in cs:
+            # frames where the screen is where it should be (tracked offset right)
+            out = (1 - reg) * inside
+            if np.abs(c.astype(np.int32) - ci).max(2)[out > 0].mean() > 30:
+                continue
+            e = float((lit(c, name) * reg * alpha).sum())
+            if e > be:
+                best, be = c, e
+        if best is None:
+            best = cs[0]
+        core = lit(best, name) * reg * alpha
+        # the prompt plus its glow: everything around the lit core that differs from the clean screen
+        near = cv2.dilate((core > 0.3).astype(np.uint8), np.ones((15, 15), np.uint8)).astype(np.float32)
+        d = np.abs(best.astype(np.int32) - ci).max(2).astype(np.float32)
+        a = np.maximum(core, np.clip((d - 15) / 45.0, 0, 1) * near) * alpha
+        a = cv2.GaussianBlur(a, (0, 0), 0.7)
+        cv2.imwrite(os.path.join(work, 'ind_%s.png' % name), np.dstack([best, (np.clip(a, 0, 1) * 255).astype(np.uint8)]))
+        info[name] = int(be)
+    # the left arrow is the right one mirrored (the screen is symmetric): always a clean, full arrow
+    r = cv2.imread(os.path.join(work, 'ind_right.png'), cv2.IMREAD_UNCHANGED)
+    if r is not None:
+        cx = int(round((cv2.boundingRect(full)[0] * 2 + cv2.boundingRect(full)[2]) / 2.0))
+        M = np.float32([[-1, 0, 2 * cx], [0, 1, 0]])
+        cv2.imwrite(os.path.join(work, 'ind_left.png'), cv2.warpAffine(r, M, (w, h), flags=cv2.INTER_LINEAR))
+    print('indicators', info)
+
+
 # ------------------------------------------------------------------------------- lever
 def lever(film, work, start, dur, fps=6):
     """Measures the lever head height in dashboard frames (aligned with the tracked offset)."""
@@ -301,7 +421,7 @@ def lever_images(work):
 
 
 # ------------------------------------------------------------------------------- pack
-def pack(film, work, out_zip):
+def pack(film, work, out_zip, update_only=False):
     al = json.load(open(os.path.join(work, 'align.json')))
     rows = load_track(work)
     pt = json.load(open(os.path.join(work, 'patches.json')))
@@ -321,7 +441,7 @@ def pack(film, work, out_zip):
                            'stream=width,height,r_frame_rate', '-of', 'json', film],
                           stdout=subprocess.PIPE).stdout)['streams'][0]
     pack_json = {
-        'format': 1,
+        'format': 2,
         'video': 'hd.mp4', 'width': meta['width'], 'height': meta['height'], 'fps': meta['r_frame_rate'],
         'chapters': {k: v['start'] for k, v in al.items() if v['ok']},
         'dashboard': {'t0': t0, 'fps': TRACK_FPS, 'offsetUnit': 0.25,
@@ -333,14 +453,27 @@ def pack(film, work, out_zip):
         'snesToFilm': {'sx': 5.6, 'sy': 5.52, 'ox': 4, 'oy': 12},
         'lever': {'rect': [LEVER[0], LEVER[1], LEVER[2] - LEVER[0], LEVER[3] - LEVER[1]],
                   'images': {'up': 'lever_up.png', 'mid': 'lever_mid.png', 'down': 'lever_down.png'}},
+        # green screen: clean background + the game's own prompts (format 2)
+        'indicators': {'rect': [GREEN[0], GREEN[1], GREEN[2] - GREEN[0], GREEN[3] - GREEN[1]],
+                       'clean': 'ind_clean.png',
+                       'icons': {k: 'ind_%s.png' % k for k in ('left', 'right', 'brake', 'accel')}},
     }
+    images = ('patch_help.png', 'patch_pause.png', 'patch_screen.png', 'lever_up.png', 'lever_mid.png',
+              'lever_down.png', 'ind_clean.png', 'ind_left.png', 'ind_right.png', 'ind_brake.png', 'ind_accel.png')
+    if update_only:     # small update for an installed pack: everything except the film
+        with zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_DEFLATED) as z:
+            z.writestr('hdpack.json', json.dumps(pack_json))
+            for f in images:
+                z.write(os.path.join(work, f), f)
+        print('update', out_zip, os.path.getsize(out_zip) // 1024, 'KB')
+        return
     vid = os.path.join(work, 'hd.mp4')
     if not os.path.exists(vid):
         run(['ffmpeg', '-v', 'error', '-y', '-i', film, '-map', '0:v:0', '-c', 'copy', '-an', '-dn',
              '-movflags', '+faststart', vid])
     with zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_STORED) as z:
         z.writestr('hdpack.json', json.dumps(pack_json))
-        for f in ('patch_help.png', 'patch_pause.png', 'patch_screen.png', 'lever_up.png', 'lever_mid.png', 'lever_down.png'):
+        for f in images:
             z.write(os.path.join(work, f), f)
         z.write(vid, 'hd.mp4')
     print('pack', out_zip, os.path.getsize(out_zip) // (1 << 20), 'MB,', len(pack_json['chapters']), 'chapters')
@@ -362,8 +495,12 @@ def main():
         lever(a[1], a[2], float(a[3]), float(a[4]))
     elif cmd == 'leverimages':
         lever_images(a[1])
+    elif cmd == 'indicators':
+        indicators(a[1], a[2])
     elif cmd == 'pack':
         pack(a[1], a[2], a[3])
+    elif cmd == 'update':
+        pack(a[1], a[2], a[3], update_only=True)
     elif cmd == 'all':
         film, game, work, out = a[1:5]
         align(film, game, work)
@@ -379,6 +516,7 @@ def main():
             lever(film, work, s, 300.0)
             s += 300.0
         lever_images(work)
+        indicators(film, work)
         pack(film, work, out)
     else:
         print(__doc__)

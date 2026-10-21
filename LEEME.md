@@ -39,13 +39,13 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.2-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.4-release.apk`
    (unos pocos MB: el juego se carga después desde la app).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
 
 ### Versiones y nombre de la APK
-La versión está en `android/gradle.properties` → `srbVersion=1.7.2`. **Súbela antes de cada
+La versión está en `android/gradle.properties` → `srbVersion=1.7.4`. **Súbela antes de cada
 build que vayas a instalar** (1.6.0 → 1.6.1 para arreglos, 1.7.0 para novedades). La APK sale
 con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
 *Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
@@ -67,7 +67,7 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.2-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.4-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ### Primera vez: cargar el juego
@@ -131,8 +131,11 @@ aciertos y choques. Se instala aparte, ocupa ~600 MB y se puede borrar cuando qu
   rápido, pausas y saltos del selector de escenas la siguen solos.
 - Cuando aparece el **salpicadero** de la versión HD, muestra **tus puntos y tus vidas** en su
   pantalla digital, se borran los iconos de botones de la versión original y la **palanca de la
-  derecha sube al acelerar y baja al frenar**. Sin salpicadero, flechas, turbo y freno salen
-  con los gráficos del juego encima de la película.
+  derecha sube al acelerar y baja al frenar**.
+- Los **avisos** (flechas, freno ✕ y turbo) salen en la pantalla verde del salpicadero con el
+  estilo de la versión HD, pero **con los tiempos del juego**: los que traía grabados la
+  película seguían otra versión y a veces faltaban o no coincidían. En los planos sin
+  salpicadero, la pantalla verde aparece sola mientras haya un aviso.
 - Escenas de choque, logos y pantallas propias del juego usan el vídeo original.
 
 **Crear el pack** (en el PC, una sola vez, con tu propia copia de la película HD; hacen falta
@@ -141,6 +144,9 @@ Python 3 con numpy y opencv-python, y ffmpeg):
 ```
 python tools\hdpack\make_hdpack.py all <pelicula_hd.mp4> <carpeta_juego_con_pcm> <trabajo> SRBN-PackHD.zip
 ```
+
+Si ya tienes el pack instalado y solo cambian sus datos, basta con la actualización pequeña
+(`make_hdpack.py update ... SRBN-PackHD-update.zip`), que conserva la película instalada.
 
 Copia `SRBN-PackHD.zip` al dispositivo y elige *Pack HD ▸ Instalar el pack HD*. El
 interruptor *Usar el vídeo HD* lo activa o desactiva al entrar en la partida.

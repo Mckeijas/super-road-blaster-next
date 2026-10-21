@@ -14,7 +14,7 @@
   function makeMockBridge() {
     // Browser preview: settings in localStorage, data from relative files.
     const defaults = { filter: 'hd', color: '1', aspect: '43', audio: 'enhanced', msuVol: '100', sfxVol: '100',
-      qte: '0', lives: '0', slowSpeed: '0.5', slowmo: '0', hud: '1', layout: 'snes', rumble: '1', uiSound: '1', intro: '1', touch: 'auto', touchAlpha: '0.2', hdVideo: '1' };
+      qte: '0', lives: '0', slowSpeed: '0.5', slowmo: '0', hud: '1', layout: 'snes', rumble: '1', uiSound: '1', intro: '1', touch: 'auto', touchAlpha: '0.2', hdVideo: '1', dev: '0' };
     let chapters = [];
     const x = new XMLHttpRequest();
     x.open('GET', '../game/chapters.json', false);
@@ -125,6 +125,38 @@
         s.buffer = this.bufs[n];
         s.connect(g).connect(this.ctx.destination);
         s.start();
+      } catch (e) {}
+    },
+    // "developer mode" jingle, synthesised (not used anywhere else): a fast chip-tune arpeggio
+    // up two octaves, then a shimmering major chord with a little vibrato
+    unlock() {
+      if (!this.ctx) return;
+      try {
+        const c = this.ctx;
+        if (c.state !== 'running') c.resume();
+        const t0 = c.currentTime + 0.02;
+        const out = c.createGain();
+        out.gain.value = setting('uiSound') === '0' ? 0.0 : 0.22;
+        out.connect(c.destination);
+        const note = (f, t, d, type, vol) => {
+          const o = c.createOscillator(), g = c.createGain();
+          o.type = type; o.frequency.setValueAtTime(f, t);
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+          o.connect(g).connect(out); o.start(t); o.stop(t + d + 0.05);
+          return o;
+        };
+        const arp = [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568, 2093];
+        arp.forEach((f, i) => note(f, t0 + i * 0.055, 0.12, 'square', 0.5));
+        const tc = t0 + arp.length * 0.055 + 0.04;
+        [1046.5, 1318.5, 1568, 2093].forEach((f, i) => {
+          const o = note(f, tc + i * 0.012, 0.9, i % 2 ? 'triangle' : 'square', 0.32);
+          const l = c.createOscillator(), lg = c.createGain();
+          l.frequency.value = 7; lg.gain.value = f * 0.012;
+          l.connect(lg).connect(o.frequency); l.start(tc); l.stop(tc + 1);
+        });
+        note(130.81, tc, 0.7, 'triangle', 0.6);
       } catch (e) {}
     },
   };
@@ -260,6 +292,10 @@
       add({ id: 'director', ico: 'clap', label: "Director's Mode", panel: 'director' });
       add({ id: 'graphics', ico: 'screen', label: 'Gráficos', panel: 'graphics' });
       add({ id: 'audio', ico: 'wave', label: 'Audio', panel: 'audio' });
+      if (setting('dev') === '1') {
+        add({ id: 'devsave', ico: 'down', label: 'Guardar partida', sub: 'Desarrollador · 3 ranuras', panel: 'slots', slotMode: 'save', dev: true });
+        add({ id: 'devload', ico: 'up', label: 'Cargar partida', sub: 'Desarrollador · partidas guardadas aquí', panel: 'slots', slotMode: 'load', dev: true });
+      }
       add({ id: 'menu', ico: 'home', label: 'Salir al launcher', sub: 'Vuelve al menú principal · la partida queda guardada', act: () => Bridge.action('menu', '') });
     } else {
       const ready = S.gameComplete && S.scenesReady;
@@ -312,7 +348,7 @@
   function renderMenu() {
     let m = '<div class="section-title">' + (PAUSE ? 'Pausa' : 'Menú') + '</div><div class="cursor"></div>';
     SECTIONS.forEach((s, i) => {
-      m += '<div class="item" data-i="' + i + '">' + svg(s.ico) + '<div>' + esc(s.label) +
+      m += '<div class="item' + (s.dev ? ' dev' : '') + '" data-i="' + i + '">' + svg(s.ico) + '<div>' + esc(s.label) +
         (s.sub ? '<small>' + esc(s.sub) + '</small>' : '') + '</div></div>';
     });
     $('nav.menu').innerHTML = m;
@@ -504,7 +540,7 @@
     let h = '<div class="section-title">Pack HD · add-on opcional</div><div class="opts stagger">';
     if (on) h += optRow('hdVideo');
     h += actionRow('importHd', on ? 'Reinstalar el pack HD' : 'Instalar el pack HD (.zip)',
-      'Elige SRBN-PackHD.zip, creado con tools/hdpack a partir de tu copia de la película HD.', 'Ⓐ Elegir .zip');
+      'Elige SRBN-PackHD.zip (o una actualización SRBN-PackHD-update.zip), creado con tools/hdpack a partir de tu copia de la película HD.', 'Ⓐ Elegir .zip');
     if (on) h += actionRow('removeHd', 'Desinstalar el pack HD', 'Libera ' + (S.hdSizeMb | 0) + ' MB. El juego sigue funcionando con el vídeo original.', 'Ⓐ Borrar');
     h += '</div><p class="note">' + (on
       ? 'Instalado. En los capítulos de la historia verás la película en alta definición; el salpicadero muestra tus puntos y vidas, y la palanca de la derecha sube al acelerar y baja al frenar. Los choques y las pantallas propias del juego usan el vídeo original.'
@@ -542,7 +578,33 @@
     if (!PAUSE) h += actionRow('movie', 'Ver la película completa', 'La aventura entera desde el prólogo, sin manos: QTE automático y sin marcador (≈ 19 min).', 'Ⓐ Ver');
     ['qte', 'lives', 'slowmo', 'slowSpeed', 'hud'].forEach((k) => { h += optRow(k); });
     h += actionRow('scenes', 'Selector de escenas', 'Salta a cualquier capítulo, incluidos los choques.', 'Ⓐ Abrir');
+    h += devRow();
     return h + '</div>';
+  }
+
+  // ---- "Desarrollador"
+  const dev = { n: 0, last: 0 };
+  function devRow() {
+    const on = setting('dev') === '1';
+    return '<div class="opt action dev' + (on ? ' on' : '') + '" data-f data-act="dev"><div class="lbl">Desarrollador<small>' +
+      (on ? 'Activado: Guardar y Cargar partida en el menú de pausa.' : 'Herramientas internas.') +
+      '</small></div><div class="val">' + (on ? 'ON' : '') + '</div></div>';
+  }
+  function devPress(el) {
+    const now = Date.now();
+    dev.n = now - dev.last < 1200 ? dev.n + 1 : 1;
+    dev.last = now;
+    const on = setting('dev') === '1';
+    if (dev.n < 5) { Sfx.play('error', 0.4); return; }   // looks like a locked button: no hint of a count
+    dev.n = 0;
+    setSetting('dev', on ? '0' : '1');
+    if (!on) { Sfx.unlock(); toast('Modo desarrollador activado: Guardar / Cargar partida en la pausa'); }
+    else { Sfx.play('back'); toast('Modo desarrollador desactivado'); }
+    el.outerHTML = devRow();
+    const nel = $('.opt.dev');
+    if (nel && !on) nel.classList.add('unlocked');
+    if (PAUSE) { refresh(); return; }   // adds / removes Guardar and Cargar partida
+    updateFocus();
   }
 
   function panelGraphics() {
@@ -782,6 +844,7 @@
         Sfx.play('confirm'); Bridge.action('importHd', ''); return;
       }
       if (el.dataset.act === 'removeHd') { removeHd(); return; }
+      if (el.dataset.act === 'dev') { devPress(el); return; }
       if (el.dataset.act === 'scenes' && !SECTIONS.some((x) => x.id === 'scenes')) {
         Sfx.play('confirm');
         ui.sub = 'scenes'; ui.pidx = 0;

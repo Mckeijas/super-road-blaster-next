@@ -443,3 +443,19 @@ body.minimode .mini { display: flex; position: fixed; inset: 0; z-index: 10; fle
 .shot canvas.clip { position: absolute; inset: 0; object-fit: cover; opacity: 0; transition: opacity .45s;
   animation: kenburns 14s ease-in-out infinite alternate; }
 .shot canvas.clip.on { opacity: 1; }
+
+/* "Desarrollador" row (Director's Mode) */
+.opt.dev { background: linear-gradient(90deg, #0b1416, #0d1119 70%); border-color: rgba(90, 220, 170, 0.14); }
+.opt.dev .lbl { color: #9fb6b4; letter-spacing: 0.02em; }
+.opt.dev .lbl small { color: #5f7674; }
+.opt.dev::before { background: linear-gradient(180deg, #2a3b3f, #3e5a57); }
+.opt.dev.focus, body.pause .opt.dev.focus { background: linear-gradient(90deg, #13262a, #0d1119 75%); border-color: rgba(120, 255, 190, 0.32); }
+.opt.dev.on, body.pause .opt.dev.on { background: linear-gradient(90deg, #0d8a45, #10b257 60%, #0c7a3d); border-color: #48ff9e; }
+.opt.dev.on .lbl, .opt.dev.on .val { color: #eafff3; }
+.opt.dev.on .lbl small { color: rgba(234, 255, 243, 0.78); }
+.opt.dev.on::before { background: #b9ffd8; }
+.opt.dev.on.focus, body.pause .opt.dev.on.focus { background: linear-gradient(90deg, #12a653, #19cc68 60%, #0f8f47); box-shadow: 0 0 2.2vh rgba(66, 255, 154, 0.35); }
+.opt.dev.unlocked { animation: devunlock 0.9s ease-out; }
+@keyframes devunlock { 0% { box-shadow: 0 0 0 0 rgba(66,255,154,0.9); filter: brightness(1.8); } 100% { box-shadow: 0 0 0 2.4vh rgba(66,255,154,0); filter: none; } }
+.item.dev svg { stroke: #42ff9a; }
+.item.dev.focus, .item.dev.sel { color: #b9ffd8; }

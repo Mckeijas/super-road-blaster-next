@@ -34,6 +34,9 @@ public final class HdPack {
     private float unit = 0.25f;
     // dashboard decoration (film pixels: x, y, w, h)
     public final int[] help = new int[4], pause = new int[4], screen = new int[4], lever = new int[4];
+    // green indicator screen (format 2): clean background + prompt images, same rectangle
+    public final int[] indicators = new int[4];
+    public boolean hasIndicators;
     // SNES picture -> film pixels
     public float sx = 5.6f, sy = 5.52f, ox = 4f, oy = 12f;
     private final File dir;
@@ -65,6 +68,12 @@ public final class HdPack {
             rect(p.getJSONArray("pause"), pause);
             rect(p.getJSONArray("screen"), screen);
         }
+        JSONObject ind = j.optJSONObject("indicators");
+        if (ind != null) {
+            rect(ind.getJSONArray("rect"), indicators);
+            hasIndicators = new File(dir, "ind_clean.png").exists();
+        }
+        fillGaps();
         JSONObject lv = j.optJSONObject("lever");
         if (lv != null) rect(lv.getJSONArray("rect"), lever);
         JSONObject m = j.optJSONObject("snesToFilm");
@@ -73,6 +82,27 @@ public final class HdPack {
             sy = (float) m.optDouble("sy", sy);
             ox = (float) m.optDouble("ox", ox);
             oy = (float) m.optDouble("oy", oy);
+        }
+    }
+
+    /** Short dropouts of the dashboard detection (< 0.5 s) would make it flicker: bridge them. */
+    private void fillGaps() {
+        int max = Math.max(1, fps / 2), i = 0, n = on.length;
+        while (i < n) {
+            if (on[i] != 0) { i++; continue; }
+            int j = i;
+            while (j < n && on[j] == 0) j++;
+            if (i > 0 && j < n && j - i <= max) {
+                for (int k = i; k < j; k++) {
+                    float f = (k - i + 1) / (float) (j - i + 1);
+                    on[k] = 1;
+                    if (k < dx.length && j < dx.length) {
+                        dx[k] = (short) Math.round(dx[i - 1] + (dx[j] - dx[i - 1]) * f);
+                        dy[k] = (short) Math.round(dy[i - 1] + (dy[j] - dy[i - 1]) * f);
+                    }
+                }
+            }
+            i = j;
         }
     }
 

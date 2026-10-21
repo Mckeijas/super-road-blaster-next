@@ -36,6 +36,8 @@ public final class Settings {
         // Interface
         DEFAULTS.put("uiSound", "1");          // menu sound effects
         DEFAULTS.put("intro", "1");            // animated title when the app opens
+        // Hidden
+        DEFAULTS.put("dev", "0");
     }
 
     private final SharedPreferences prefs;

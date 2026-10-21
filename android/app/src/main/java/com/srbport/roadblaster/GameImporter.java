@@ -118,7 +118,8 @@ public final class GameImporter {
 
     // ------------------------------------------------------------------ HD video add-on
     private static final String[] HD_FILES = {"hdpack.json", "hd.mp4", "patch_help.png", "patch_pause.png",
-            "patch_screen.png", "lever_up.png", "lever_mid.png", "lever_down.png"};
+            "patch_screen.png", "lever_up.png", "lever_mid.png", "lever_down.png",
+            "ind_clean.png", "ind_left.png", "ind_right.png", "ind_brake.png", "ind_accel.png"};
 
     /** Installs the HD pack (.zip made with tools/hdpack/make_hdpack.py). */
     public static synchronized void startHdImport(Context ctx, Uri uri) {
@@ -186,11 +187,20 @@ public final class GameImporter {
             if (e instanceof java.util.zip.ZipException) throw new IOException("El archivo no es un .zip válido.");
             throw e;
         }
-        if (!got.contains("hdpack.json") || !got.contains("hd.mp4")) {
-            deleteTree(staging);
-            throw new IOException("El .zip no es un pack HD de SRBN.");
-        }
         File dst = new File(ctx.getFilesDir(), "hd");
+        File oldVideo = new File(dst, "hd.mp4");
+        boolean update = got.contains("hdpack.json") && !got.contains("hd.mp4") && oldVideo.isFile();
+        if (!got.contains("hdpack.json") || (!got.contains("hd.mp4") && !update)) {
+            deleteTree(staging);
+            throw new IOException(got.contains("hdpack.json")
+                    ? "Es una actualización del pack HD: primero instala el pack completo."
+                    : "El .zip no es un pack HD de SRBN.");
+        }
+        // update zip (no film inside): keep the film already installed
+        if (update && !oldVideo.renameTo(new File(staging, "hd.mp4"))) {
+            deleteTree(staging);
+            throw new IOException("No se pudo actualizar el pack HD.");
+        }
         deleteTree(dst);
         if (!staging.renameTo(dst)) throw new IOException("No se pudo guardar el pack HD.");
         if (HdPack.load(ctx) == null) {

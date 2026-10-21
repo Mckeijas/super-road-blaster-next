@@ -104,5 +104,8 @@ void setHdOverlay(bool on);                         // use the HD film where ava
 void setHdChapters(const std::vector<uint8_t> &mask); // chapters present in the film
 bool playerStats(int *score, int *lives);           // current score (x1000 on screen) and lives
 uint16_t effectiveButtons();                        // buttons the game sees (pad + automatic QTE)
+// Prompts the game is asking for at that point of a chapter (HD add-on draws its own):
+// bit 0 left, 1 right, 2 brake, 3 accelerate. 0 in movie mode or with the HUD hidden.
+int promptsAt(int track, int audioSample);
 size_t romPatchOffsetLoseLife();
 } // namespace srb
