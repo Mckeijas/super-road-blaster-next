@@ -39,13 +39,13 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.8-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.9-release.apk`
    (unos pocos MB: el juego se carga después desde la app).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
 
 ### Versiones y nombre de la APK
-La versión está en `android/gradle.properties` → `srbVersion=1.7.8`. **Súbela antes de cada
+La versión está en `android/gradle.properties` → `srbVersion=1.7.9`. **Súbela antes de cada
 build que vayas a instalar** (1.6.0 → 1.6.1 para arreglos, 1.7.0 para novedades). La APK sale
 con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
 *Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
@@ -67,7 +67,7 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.8-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.9-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ### Primera vez: cargar el juego
@@ -129,7 +129,7 @@ aquí, si la maniobra termina en choque, los puntos de esa maniobra no cuentan.
 ### Pack HD (add-on opcional)
 Sustituye el vídeo de la aventura por la **película en alta definición** (1440×1080, 60 fps)
 **sin cambiar la jugabilidad**: aceleras, frenas y giras igual, y el juego sigue decidiendo
-aciertos y choques. Se instala aparte, ocupa ~600 MB y se puede borrar cuando quieras.
+aciertos y choques. Se instala aparte, ocupa algo más de 1 GB y se puede borrar cuando quieras.
 
 - La película va **sincronizada con el audio MSU-1** de cada escena: cámara lenta, avance
   rápido, pausas y saltos del selector de escenas la siguen solos.
@@ -142,13 +142,18 @@ aciertos y choques. Se instala aparte, ocupa ~600 MB y se puede borrar cuando qu
   flechas rojas de SNES. Los avisos que traía grabados la película (seguían otra versión) quedan
   tapados también en los planos en los que el salpicadero se desplaza. En los planos sin
   salpicadero, la pantalla verde aparece sola mientras haya un aviso.
-- Tras un choque, la película queda preparada en el punto donde se reanuda mientras se ve la
-  escena del choque, así que el salpicadero HD vuelve al instante. Los retoques del salpicadero
-  siguen el fotograma que hay en pantalla, sin adelantarse ni quedarse atrás en los cortes.
+- La película del pack se recodifica para que cualquier salto del juego (reanudar tras un
+  choque, selector de escenas, cargar partida, cambio de clip) muestre el fotograma correcto al
+  momento: un fotograma clave cada medio segundo y en cada inicio de capítulo. En los capítulos
+  con película nunca aparece el vídeo de SNES (ni su salpicadero ni sus flechas rojas): si la
+  película aún está colocándose, la imagen queda en negro ese instante. Tras un choque, además,
+  la película queda preparada en el punto donde se reanuda mientras se ve la escena del choque.
+  Los retoques del salpicadero siguen el fotograma que hay en pantalla.
 - Escenas de choque, logos y pantallas propias del juego usan el vídeo original.
 
 **Crear el pack** (en el PC, una sola vez, con tu propia copia de la película HD; hacen falta
-Python 3 con numpy y opencv-python, y ffmpeg):
+Python 3 con numpy y opencv-python, y ffmpeg con libx264; recodificar la película lleva unos
+20-40 minutos):
 
 ```
 python tools\hdpack\make_hdpack.py all <pelicula_hd.mp4> <carpeta_juego_con_pcm> <trabajo> SRBN-PackHD.zip

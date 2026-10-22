@@ -360,6 +360,7 @@ struct State {
     std::vector<uint8_t> hdChapters;     // 1 = chapter present in the HD film
     std::mutex hdMutex;
     bool frameOverlay = false;           // layers used for the frame being rendered
+    int ovTrack = -1, ovHold = 0;        // last track with a picture, frames without one
 
     uint16_t injected = 0, blocked = 0;
     int framesSinceInject = 9999;
@@ -676,8 +677,13 @@ void applyLayers() {
     // (dashboard, text). Video lives on BG1/BG2.
     bool hide = g->movieMode.load() || !g->hudVisible.load();
     uint8 forced = hide ? (uint8)(0x10 | 0x04) : 0;
-    // HD add-on: no MSU-1 video in chapters the film covers (the app draws the HD frame)
-    g->frameOverlay = hdMapped(trackNow());
+    // HD add-on: no MSU-1 video in chapters the film covers (the app draws the HD frame).
+    // Between two chapters there is no track for a few frames: keep the last one, so the SNES
+    // video (and its dashboard) does not flash in at every change of clip.
+    int tr = trackNow();
+    if (tr >= 0) { g->ovTrack = tr; g->ovHold = 0; }
+    else if (g->ovTrack >= 0 && g->ovHold < 25) { g->ovHold++; tr = g->ovTrack; }
+    g->frameOverlay = hdMapped(tr);
     if (g->frameOverlay) forced |= 0x01 | 0x02 | 0x04;   // HUD = sprites only
     Settings.BG_Forced = forced;
 }

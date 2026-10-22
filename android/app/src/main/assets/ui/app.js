@@ -544,7 +544,7 @@
     if (on) h += actionRow('removeHd', 'Desinstalar el pack HD', 'Libera ' + (S.hdSizeMb | 0) + ' MB. El juego sigue funcionando con el vídeo original.', 'Ⓐ Borrar');
     h += '</div><p class="note">' + (on
       ? 'Instalado. En los capítulos de la historia verás la película en alta definición; el salpicadero muestra tus puntos y vidas, y la palanca de la derecha sube al acelerar y baja al frenar. Los choques y las pantallas propias del juego usan el vídeo original.'
-      : 'El pack HD sustituye el vídeo de la aventura por la película en alta definición sin tocar la jugabilidad: sigues acelerando, frenando y girando igual. Ocupa unos 600 MB y se instala y desinstala por separado.') + '</p>';
+      : 'El pack HD sustituye el vídeo de la aventura por la película en alta definición sin tocar la jugabilidad: sigues acelerando, frenando y girando igual. Ocupa algo más de 1 GB y se instala y desinstala por separado.') + '</p>';
     return h;
   }
 

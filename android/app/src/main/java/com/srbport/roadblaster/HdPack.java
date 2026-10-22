@@ -37,6 +37,8 @@ public final class HdPack {
     // green indicator screen (format 2): clean background + prompt images, same rectangle
     public final int[] indicators = new int[4];
     public boolean hasIndicators;
+    // seconds between keyframes of hd.mp4 (0.5 in packs from 1.7.9 on; older packs: up to 5 s)
+    public double keyframeInterval = 5.0;
     // SNES picture -> film pixels
     public float sx = 5.6f, sy = 5.52f, ox = 4f, oy = 12f;
     private final File dir;
@@ -46,6 +48,7 @@ public final class HdPack {
         video = new File(dir, "hd.mp4");
         JSONObject j = new JSONObject(new String(GameData.readFile(new File(dir, "hdpack.json")), "UTF-8"));
         Arrays.fill(chapterStart, Double.NaN);
+        keyframeInterval = j.optDouble("keyframeInterval", 5.0);
         JSONObject ch = j.getJSONObject("chapters");
         for (Iterator<String> it = ch.keys(); it.hasNext(); ) {
             String k = it.next();

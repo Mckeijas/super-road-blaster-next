@@ -69,6 +69,8 @@ public final class GameRenderer implements GLSurfaceView.Renderer {
     public GameRenderer(AssetManager am) { assets = am; }
 
     /** HD video add-on (null = off). Set before the surface is created. */
+    private int heldTrack = -1, heldAudioPos = -1;
+
     public void setHd(HdCompositor c) { hd = c; }
 
     public void configure(String filter, boolean enhancedColor, String aspect) {
@@ -119,6 +121,10 @@ public final class GameRenderer implements GLSurfaceView.Renderer {
             overlayFrame = info[2] != 0;
             track = info[3];
             audioPos = info[4];
+            // between two chapters the game has no MSU-1 track for a frame or two: keep the HD
+            // picture on the last one instead of falling back to the SNES video
+            if (track < 0 && overlayFrame && heldTrack >= 0) { track = heldTrack; audioPos = heldAudioPos; }
+            else if (track >= 0) { heldTrack = track; heldAudioPos = audioPos; }
             keyColor = info[5];
             upload(lastW, lastH);
             hasFrame = true;

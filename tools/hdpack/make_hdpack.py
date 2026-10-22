@@ -11,7 +11,7 @@ Requirements: Python 3, numpy, opencv-python, ffmpeg/ffprobe in PATH.
     make_hdpack.py track   <film.mp4> <work> <start_s> <dur_s> # iOS dashboard presence/offset
     make_hdpack.py patches <film.mp4> <work>                  # clean "?" / pause / screen patches
     make_hdpack.py indicators <film.mp4> <work>               # green screen: clean + prompt icons
-    make_hdpack.py pack    <film.mp4> <work> <out.zip>         # hd.mp4 + hdpack.json + patches
+    make_hdpack.py pack    <film.mp4> <work> <out.zip>         # hd.mp4 (re-encoded for instant jumps) + data
     make_hdpack.py all     <film.mp4> <game_dir> <work> <out.zip>
 
 How it works
@@ -421,7 +421,8 @@ def lever_images(work):
 
 
 # ------------------------------------------------------------------------------- pack
-def pack(film, work, out_zip):
+def pack_meta(film, work):
+    """hdpack.json contents and the list of images of the pack."""
     al = json.load(open(os.path.join(work, 'align.json')))
     rows = load_track(work)
     pt = json.load(open(os.path.join(work, 'patches.json')))
@@ -443,6 +444,7 @@ def pack(film, work, out_zip):
     pack_json = {
         'format': 2,
         'video': 'hd.mp4', 'width': meta['width'], 'height': meta['height'], 'fps': meta['r_frame_rate'],
+        'keyframeInterval': 0.5,   # film_for_app(): the app seeks for any jump
         'chapters': {k: v['start'] for k, v in al.items() if v['ok']},
         'dashboard': {'t0': t0, 'fps': TRACK_FPS, 'offsetUnit': 0.25,
                       'on': base64.b64encode(on.tobytes()).decode(),
@@ -460,13 +462,35 @@ def pack(film, work, out_zip):
     }
     images = ('patch_help.png', 'patch_pause.png', 'patch_screen.png', 'lever_up.png', 'lever_mid.png',
               'lever_down.png', 'ind_clean.png', 'ind_left.png', 'ind_right.png', 'ind_brake.png', 'ind_accel.png')
+    return pack_json, images
+
+
+def film_for_app(film, work):
+    """The film as the app plays it: re-encoded so that any jump of the game (checkpoint after a
+    crash, scene select, loading a game) shows the right frame at once. A keyframe every 0.5 s
+    and exactly at every chapter start, no B-frames (decode order = display order, so every frame
+    keeps its time), same frames and timing as the original (60 fps). Takes a while (~20-40 min)."""
     vid = os.path.join(work, 'hd.mp4')
-    if not os.path.exists(vid):
-        run(['ffmpeg', '-v', 'error', '-y', '-i', film, '-map', '0:v:0', '-c', 'copy', '-an', '-dn',
-             '-movflags', '+faststart', vid])
+    if os.path.exists(vid):
+        return vid
+    al = json.load(open(os.path.join(work, 'align.json')))
+    kf = ','.join('%.3f' % max(0.0, v['start'] - 0.02) for v in sorted(al.values(), key=lambda v: v['start']) if v['ok'])
+    base = ['ffmpeg', '-v', 'error', '-stats', '-y', '-i', film, '-map', '0:v:0', '-an', '-dn']
+    enc = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-g', '30', '-bf', '0', '-pix_fmt', 'yuv420p',
+           '-force_key_frames', '0,' + kf, '-movflags', '+faststart', vid]
+    try:
+        run(base + ['-fps_mode', 'passthrough'] + enc)
+    except subprocess.CalledProcessError:
+        run(base + ['-vsync', 'passthrough'] + enc)      # older ffmpeg
+    return vid
+
+
+def pack(film, work, out_zip):
+    pack_json, images = pack_meta(film, work)
+    vid = film_for_app(film, work)
     # One file for everything. The film goes LAST and stored (its size is in the local header):
     # the app reads the small files first and, if the same film is already installed, stops
-    # there instead of copying 600 MB again.
+    # there instead of copying the film again.
     with zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_STORED) as z:
         z.writestr('hdpack.json', json.dumps(pack_json))
         for f in images:

@@ -104,14 +104,23 @@ final class HdCompositor {
             // A crash scene (game video) is followed by the same chapter from its start: have
             // that film frame decoded and waiting, so the HD picture comes back at once.
             if (isCrashScene(track) && lastFilmTrack >= 0) video.setPreroll(pack.filmTime(lastFilmTrack, 0));
+            unsyncedSince = 0;
             return false;
         }
         lastFilmTrack = track;
         video.setPreroll(-1);
         video.setTarget(t);
         video.setActive(true);
-        return ok && video.synced();
+        if (!ok) return false;
+        // Stay on the HD picture while the decoder catches up after a jump (load, scene select,
+        // checkpoint): the SNES video, its dashboard and red arrows must not pop in. Only if
+        // the film does not come back at all is the game's own video used.
+        if (video.synced()) { unsyncedSince = 0; return true; }
+        long now = android.os.SystemClock.uptimeMillis();
+        if (unsyncedSince == 0) unsyncedSince = now;
+        return now - unsyncedSince < 2000;
     }
+    private long unsyncedSince;
 
     /** Chapters not in the film other than game over (0), high scores (1) and the logo (121). */
     private boolean isCrashScene(int track) {
@@ -147,8 +156,18 @@ final class HdCompositor {
         // dress the dashboard of the frame really on screen (not the one asked for), so the
         // patches never come in late or stay after a cut
         double shown = video.shownTime();
-        double td = !Double.isNaN(t) && shown >= 0 && Math.abs(shown - t) < 0.5 ? shown : t;
-        if (!Double.isNaN(td) && pack.dashboardAt(td, off)) {
+        if (Double.isNaN(t) || shown < 0 || Math.abs(shown - t) > 0.5) {
+            // the film is still seeking to this point: black for that instant (never a picture
+            // of another scene nor the SNES dashboard)
+            GLES30.glDisable(GLES30.GL_BLEND);
+            GLES30.glUseProgram(progDim);
+            GLES30.glUniform1f(GLES30.glGetUniformLocation(progDim, "uA"), 1f);
+            GLES30.glVertexAttribPointer(0, 2, GLES30.GL_FLOAT, false, 0, quad);
+            GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4);
+            return;
+        }
+        double td = shown;
+        if (pack.dashboardAt(td, off)) {
             // 2. iOS dashboard, dressed for this game
             float ox = off[0], oy = off[1];
             floatAlpha = 0f;

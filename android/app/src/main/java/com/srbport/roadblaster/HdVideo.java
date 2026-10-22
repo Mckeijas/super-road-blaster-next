@@ -54,6 +54,11 @@ public final class HdVideo implements SurfaceTexture.OnFrameAvailableListener {
         thread.start();
     }
 
+    private volatile double seekAhead = 2.0;     // jump forward by seeking beyond this (s)
+
+    /** Dense keyframes (new packs): seek for any jump ahead; sparse: decode through up to 2 s. */
+    public void setKeyframeInterval(double s) { seekAhead = s <= 1.0 ? 0.4 : 2.0; }
+
     public void setTarget(double t) { target = t; }
     public void setActive(boolean a) { active = a; }
 
@@ -133,8 +138,8 @@ public final class HdVideo implements SurfaceTexture.OnFrameAvailableListener {
                     sleep(15);
                     continue;
                 }
-                // far from what we have: jump (keyframes are 1-5 s apart, the rest decodes fast)
-                if (!needSeek && newest >= 0 && (t < newest - 0.25 || t > newest + 2.0)) needSeek = true;
+                // far from what we have: jump (with keyframes 0.5 s apart a seek is always quick)
+                if (!needSeek && newest >= 0 && (t < newest - 0.25 || t > newest + seekAhead)) needSeek = true;
                 if (needSeek) {
                     if (pending >= 0) { codec.releaseOutputBuffer(pending, false); pending = -1; }
                     ex.seekTo((long) (t * 1e6), MediaExtractor.SEEK_TO_PREVIOUS_SYNC);

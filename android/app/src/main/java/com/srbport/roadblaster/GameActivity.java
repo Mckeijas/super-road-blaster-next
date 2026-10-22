@@ -80,6 +80,7 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
             hdPack = HdPack.load(this);
             if (hdPack != null) {
                 hdVideo = new HdVideo(hdPack.video);
+                hdVideo.setKeyframeInterval(hdPack.keyframeInterval);
                 renderer.setHd(new HdCompositor(hdPack, hdVideo));
             }
         }
