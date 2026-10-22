@@ -39,13 +39,13 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.8.3-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.8.4-release.apk`
    (unos pocos MB: el juego se carga después desde la app).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
 
 ### Versiones y nombre de la APK
-La versión está en `android/gradle.properties` → `srbVersion=1.8.3`. **Súbela antes de cada
+La versión está en `android/gradle.properties` → `srbVersion=1.8.4`. **Súbela antes de cada
 build que vayas a instalar** (1.6.0 → 1.6.1 para arreglos, 1.7.0 para novedades). La APK sale
 con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
 *Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
@@ -67,7 +67,7 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.8.3-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.8.4-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ### Primera vez: cargar el juego

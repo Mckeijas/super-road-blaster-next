@@ -157,8 +157,11 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
                 File f = GameData.slotFile(this, Integer.parseInt(arg));
                 if (f.exists()) state = GameData.readFile(f);
             }
+            // "Continuar" is the same game; so are the developer's saved games (an exception the
+            // owner wants): both keep the clean-run status ("!" record and final picture)
             boolean resume = "resume".equals(mode);
-            if (state != null && !(resume ? NativeBridge.nativeResumeState(state) : NativeBridge.nativeLoadState(state))) {
+            boolean keepRun = resume || ("slot".equals(mode) && settings.flag("dev"));
+            if (state != null && !(keepRun ? NativeBridge.nativeResumeState(state) : NativeBridge.nativeLoadState(state))) {
                 Log.w(TAG, "state load failed");
                 // "Continuar" saved by an older version after the game had stopped: start that
                 // stretch of road again from its beginning instead
@@ -395,7 +398,10 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
                 int slot = parse(arg, 1);
                 emu.post(() -> {
                     try {
-                        NativeBridge.nativeLoadState(GameData.readFile(GameData.slotFile(this, slot)));
+                        byte[] st = GameData.readFile(GameData.slotFile(this, slot));
+                        // developer's saved games keep the clean-run status they were saved with
+                        if (settings.flag("dev")) NativeBridge.nativeResumeState(st);
+                        else NativeBridge.nativeLoadState(st);
                         runOnUiThread(this::closeMenu);
                     } catch (Exception ex) {
                         toast("Ranura vacía");
