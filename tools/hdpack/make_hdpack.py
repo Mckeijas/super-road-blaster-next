@@ -35,6 +35,7 @@ SR = 8000                       # analysis sample rate
 W2, H2 = 720, 540               # tracking resolution (1/2 of 1440x1080)
 SC = 2                          # film pixels per tracking pixel
 TRACK_FPS = 60
+DASH_MIN = 0.5                  # template score that means "dashboard on screen" (shifted, dimmed shots score ~0.59)
 # Dashboard layout in the 1440x1080 film (iOS release)
 TPL = (540, 830, 960, 990)      # template: screen frame + bezel around it (x0, y0, x1, y1)
 HELP = (520, 828, 46)           # "?" button: centre x, centre y, radius
@@ -180,7 +181,7 @@ def track(film, work, start, dur):
     proc.wait()
     name = os.path.join(work, 'track_%07.1f.json' % start)
     json.dump(rows, open(name, 'w'))
-    on = sum(1 for r in rows if r[1] > 0.6)
+    on = sum(1 for r in rows if r[1] > DASH_MIN)
     print('track %s: %d frames, dashboard on %d' % (name, len(rows), on))
 
 
@@ -433,7 +434,7 @@ def pack(film, work, out_zip, update_only=False):
     dy = np.zeros(n, '<i2')
     for t, s, x, y in rows:
         i = int(round((t - t0) * TRACK_FPS))
-        if 0 <= i < n and s > 0.6:
+        if 0 <= i < n and s > DASH_MIN:
             on[i] = 1
             dx[i] = int(round(x * 4))
             dy[i] = int(round(y * 4))

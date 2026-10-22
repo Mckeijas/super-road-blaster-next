@@ -39,13 +39,13 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.5-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.6-release.apk`
    (unos pocos MB: el juego se carga después desde la app).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
 
 ### Versiones y nombre de la APK
-La versión está en `android/gradle.properties` → `srbVersion=1.7.5`. **Súbela antes de cada
+La versión está en `android/gradle.properties` → `srbVersion=1.7.6`. **Súbela antes de cada
 build que vayas a instalar** (1.6.0 → 1.6.1 para arreglos, 1.7.0 para novedades). La APK sale
 con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
 *Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
@@ -67,7 +67,7 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.5-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.6-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ### Primera vez: cargar el juego
@@ -133,8 +133,10 @@ aciertos y choques. Se instala aparte, ocupa ~600 MB y se puede borrar cuando qu
   pantalla digital, se borran los iconos de botones de la versión original y la **palanca de la
   derecha sube al acelerar y baja al frenar**.
 - Los **avisos** (flechas, freno ✕ y turbo) salen en la pantalla verde del salpicadero con el
-  estilo de la versión HD, pero **con los tiempos del juego**: los que traía grabados la
-  película seguían otra versión y a veces faltaban o no coincidían. En los planos sin
+  estilo de la versión HD, pero **con los tiempos del juego**: la app lee del propio juego qué
+  avisos tiene en pantalla, así que se encienden y se apagan en el mismo instante que las
+  flechas rojas de SNES. Los avisos que traía grabados la película (seguían otra versión) quedan
+  tapados también en los planos en los que el salpicadero se desplaza. En los planos sin
   salpicadero, la pantalla verde aparece sola mientras haya un aviso.
 - Escenas de choque, logos y pantallas propias del juego usan el vídeo original.
 

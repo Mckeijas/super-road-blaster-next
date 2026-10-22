@@ -744,29 +744,77 @@
 
   // ---------------------------------------------------------------- input
   // ---------------------------------------------------------------- in-game pause (START)
-  const MINI = [
-    { label: 'Continuar', act: () => Bridge.action('resume', '') },
-    { label: 'Salir al menú principal', act: () => Bridge.action('menu', '') },
-  ];
-  let mini = false, miniIdx = 0;
+  // Developer tools add "Guardar partida" / "Cargar partida" here, each opening its 3 slots.
+  let mini = false, miniIdx = 0, miniView = 'main', miniNote = '';
+  function miniItems() {
+    if (miniView === 'save' || miniView === 'load') {
+      const save = miniView === 'save';
+      const items = (S.slots || []).map((s) => {
+        const ch = s.exists ? S.byId[+s.chapter] : null;
+        const what = s.exists ? (ch ? ch.title : 'Partida') + ' · ' + s.date : (save ? 'Libre' : 'Vacía');
+        return { label: 'Ranura ' + s.slot + ' — ' + what, slot: String(s.slot), exists: !!s.exists };
+      });
+      items.push({ label: 'Volver', back: true });
+      return items;
+    }
+    const items = [{ label: 'Continuar', act: () => Bridge.action('resume', '') }];
+    if (setting('dev') === '1') {
+      items.push({ label: 'Guardar partida', view: 'save' });
+      items.push({ label: 'Cargar partida', view: 'load' });
+    }
+    items.push({ label: 'Salir al menú principal', act: () => Bridge.action('menu', '') });
+    return items;
+  }
   function renderMini() {
     const box = $('.mini');
     if (!box) return;
+    const items = miniItems();
+    if (miniIdx >= items.length) miniIdx = 0;
     const ch = S.extra && S.byId[S.extra.chapter];
+    const sub = miniView === 'save' ? 'Guardar en…' : miniView === 'load' ? 'Cargar partida' : (ch ? ch.title : '');
     box.innerHTML = '<div class="mtitle">PAUSA</div>' +
-      (ch ? '<div class="msub">' + esc(ch.title) + '</div>' : '') +
-      '<div class="mlist">' + MINI.map((m, i) => '<div class="mitem' + (i === miniIdx ? ' on' : '') + '" data-i="' + i + '">' + esc(m.label) + '</div>').join('') + '</div>' +
-      '<div class="mhint"><span class="key a">A</span>Elegir &nbsp;&nbsp; <span class="key">START</span>Continuar</div>';
+      (sub ? '<div class="msub">' + esc(sub) + '</div>' : '') +
+      '<div class="mlist">' + items.map((m, i) => '<div class="mitem' + (i === miniIdx ? ' on' : '') + '" data-i="' + i + '">' + esc(m.label) + '</div>').join('') + '</div>' +
+      (miniNote ? '<div class="msub">' + esc(miniNote) + '</div>' : '') +
+      '<div class="mhint"><span class="key a">A</span>Elegir &nbsp;&nbsp; <span class="key">' + (miniView === 'main' ? 'START</span>Continuar' : 'B</span>Volver') + '</div>';
     $$('.mitem', box).forEach((el) => { el.onclick = () => { miniIdx = +el.dataset.i; pressMini('A'); }; });
   }
+  function miniBack() {
+    const from = miniView;
+    miniView = 'main'; miniNote = '';
+    miniIdx = Math.max(0, miniItems().findIndex((m) => m.view === from));
+    renderMini();
+  }
   function pressMini(tok) {
+    const items = miniItems();
     if (tok === 'UP' || tok === 'DOWN') {
-      miniIdx = (miniIdx + (tok === 'UP' ? -1 : 1) + MINI.length) % MINI.length;
+      miniIdx = (miniIdx + (tok === 'UP' ? -1 : 1) + items.length) % items.length;
       Sfx.play('move', 0.45);
       renderMini();
     } else if (tok === 'A') {
+      const m = items[miniIdx];
+      if (!m) return;
+      if (m.back) { Sfx.play('back', 0.5); miniBack(); return; }
+      if (m.view) { Sfx.play('confirm', 0.6); miniView = m.view; miniIdx = 0; miniNote = ''; renderMini(); return; }
+      if (m.slot) {
+        if (miniView === 'save') {
+          Sfx.play('confirm', 0.6);
+          Bridge.action('save', m.slot);
+          miniNote = 'Guardado en la ranura ' + m.slot;
+          setTimeout(() => { loadState(); if (mini) renderMini(); }, 450);
+          renderMini();
+          return;
+        }
+        if (!m.exists) { Sfx.play('error'); miniNote = 'Ranura vacía'; renderMini(); return; }
+        Sfx.play('confirm', 0.6);
+        Bridge.action('load', m.slot);
+        return;
+      }
       Sfx.play('confirm', 0.6);
-      MINI[miniIdx].act();
+      m.act();
+    } else if (tok === 'B' && miniView !== 'main') {
+      Sfx.play('back', 0.5);
+      miniBack();
     } else if (tok === 'B' || tok === 'START') {
       Sfx.play('back', 0.5);
       Bridge.action('resume', '');
@@ -1073,7 +1121,7 @@
   }
   window.srbOpenMini = () => {
     loadState();
-    mini = true; miniIdx = 0;
+    mini = true; miniIdx = 0; miniView = 'main'; miniNote = '';
     document.body.classList.add('minimode');
     renderMini();
     Sfx.play('open', 0.5);

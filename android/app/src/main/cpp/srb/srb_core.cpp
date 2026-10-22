@@ -380,6 +380,11 @@ struct State {
     std::atomic<int> rumble{0};
     int lastRumbleFrame = -1;
 
+    // Prompts on screen (the game's own arrow / brake / turbo sprites), read from WRAM with
+    // every picture: bit 0 left, 1 right, 2 brake, 3 accelerate. -1 = not found yet.
+    std::atomic<int> hudPrompts{-1};
+    int oopAlign = -1;             // offset (mod 16) of the game's object stack records
+
     // Infinite-lives ROM patch
     size_t loseLifeDec = 0;        // offset of "DEC dp" inside the ROM, 0 = not found
     uint8_t loseLifeOrig[2] = {0, 0};
@@ -434,6 +439,49 @@ bool envCb(unsigned cmd, void *data) {
     }
 }
 
+// The game's prompt sprites (see the game's oop.h: class ids in declaration order) are
+// singletons created by the event when its start frame is reached and moved off screen
+// (y >= 224) when its end frame is reached. Reading them gives exactly what the SNES shows.
+constexpr int kOidRightArrow = 44, kOidLeftArrow = 45, kOidTurbo = 46, kOidBrake = 47, kOidPlayer = 52;
+
+bool oopRecord(const uint8_t *w, int o, int *dp) {
+    if (!(w[o] & 0x01)) return false;                       // OBJECT.FLAGS.Present
+    int d = w[o + 8] | (w[o + 9] << 8);
+    int play = w[o + 12] | (w[o + 13] << 8);
+    if (d < 0x100 || d + 40 >= 0x2000 || play < 0x8000) return false;
+    *dp = d;
+    return true;
+}
+
+int readHudPrompts() {
+    if (!g || !g->loaded) return -1;
+    const uint8_t *w = Memory.RAM;
+    if (g->oopAlign < 0) {                                  // find the record grid once (via Player)
+        for (int o = 0x6000; o < 0x7000; o += 2) {
+            int dp;
+            if (w[o + 1] != kOidPlayer || !oopRecord(w, o, &dp)) continue;
+            if (w[dp + 34] > 20) continue;
+            g->oopAlign = o & 15;
+            break;
+        }
+        if (g->oopAlign < 0) return -1;
+    }
+    int m = 0;
+    for (int o = 0x6000 + g->oopAlign; o + 16 <= 0x7000; o += 16) {
+        int id = w[o + 1];
+        if (id < kOidRightArrow || id > kOidBrake) continue;
+        int dp;
+        if (!oopRecord(w, o, &dp)) continue;
+        int y = w[dp + 32] | (w[dp + 33] << 8);              // dimension.position.y (integer part)
+        if (y >= 224) continue;                               // parked off screen = prompt over
+        if (id == kOidLeftArrow) m |= 1;
+        else if (id == kOidRightArrow) m |= 2;
+        else if (id == kOidBrake) m |= 4;
+        else m |= 8;
+    }
+    return m;
+}
+
 void videoCb(const void *data, unsigned w, unsigned h, size_t pitch) {
     if (!data || !g) return; // dupe frame
     std::lock_guard<std::mutex> lk(g->frameMutex);
@@ -453,6 +501,7 @@ void videoCb(const void *data, unsigned w, unsigned h, size_t pitch) {
         int r = c & 31, gg = (c >> 5) & 31, b = (c >> 10) & 31;
         g->frame.key = (uint16_t)((r << 11) | (((gg << 1) | (gg >> 4)) << 5) | b);
     }
+    if (g->frame.track >= 0) g->hudPrompts = readHudPrompts();
     g->frame.serial++;
 }
 
@@ -856,6 +905,11 @@ uint16_t effectiveButtons() { return g ? effectiveMask() : 0; }
 int promptsAt(int track, int audioSample) {
     if (!g || track < 0 || track >= (int)g->chapters.size() || audioSample < 0) return 0;
     if (g->movieMode.load() || !g->hudVisible.load()) return 0;
+    // Preferred: what the game itself has on screen right now (same moments as the SNES
+    // arrows, including overlapping and repeated events).
+    int live = g->hudPrompts.load();
+    if (live >= 0) return live;
+    // Fallback: event table (chapters.txt)
     int f = (int)(audioSample / 44100.0 * kVideoFps);
     int m = 0;
     for (const QteEvent &e : g->chapters[(size_t)track].events) {
