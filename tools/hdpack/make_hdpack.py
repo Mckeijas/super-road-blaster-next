@@ -413,7 +413,25 @@ def lever_images(work):
     band = g[:, 40:340].mean(1)
     trim = next((y for y in range(10, len(band)) if band[y] > 185), 100)
     alpha = np.clip((np.arange(g.shape[0]) - (trim - 10)) / 8.0, 0, 1)
-    a8 = (np.repeat(alpha[:, None], g.shape[1], 1) * 255).astype(np.uint8)
+    top = np.repeat(alpha[:, None], g.shape[1], 1)
+    # only where the lever moves (knob and slot in its three positions), with a soft edge: the
+    # rest of the dashboard keeps the film's own pixels, so no straight seam shows where the
+    # light panel's shading changes from shot to shot
+    d = np.zeros(g.shape, np.float32)
+    for a_, b_ in (('up', 'mid'), ('mid', 'down'), ('up', 'down')):
+        d = np.maximum(d, np.abs(meds[a_].astype(np.float32) - meds[b_].astype(np.float32)).max(2))
+    m = ((d > 40) & (top > 0.99)).astype(np.uint8) * 255
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)))
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
+    n, lab, st, _ = cv2.connectedComponentsWithStats(m)
+    fill = np.zeros_like(m)
+    if n > 1:
+        blob = (lab == 1 + int(np.argmax(st[1:, 4]))).astype(np.uint8)
+        cv2.fillConvexPoly(fill, cv2.convexHull(cv2.findNonZero(blob)), 1)
+    fill = cv2.dilate(fill, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
+    soft = np.clip(cv2.GaussianBlur(fill.astype(np.float32), (0, 0), 10) * 1.2, 0, 1)
+    soft *= np.clip((np.arange(g.shape[1]) - 4) / 30.0, 0, 1)[None, :]    # never a hard left edge
+    a8 = np.round(soft * top * 255).astype(np.uint8)
     for name, med in meds.items():
         cv2.imwrite(os.path.join(work, 'lever_%s.png' % name), np.dstack([med, a8]))
     info['trimRow'] = int(trim)
