@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 
 /** The game screen: emulator + renderer + pause menu overlay. */
 public final class GameActivity extends Activity implements EmuThread.Listener, UiBridge.Host {
+    private static final String END_CARD = "end/srbn_gracias.jpg";   // shown after a clean run
     public static final String EXTRA_MODE = "mode";   // new | resume | scene | movie | slot
     public static final String EXTRA_ARG = "arg";
     private static final String TAG = "SRBGame";
@@ -263,6 +264,12 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
                 || code == KeyEvent.KEYCODE_VOLUME_MUTE) {
             return super.dispatchKeyEvent(e);
         }
+        if (endCard != null) {             // "thank you for playing": A / B / START close it
+            if (e.getAction() == KeyEvent.ACTION_UP && (code == KeyEvent.KEYCODE_BUTTON_A
+                    || code == KeyEvent.KEYCODE_BUTTON_B || code == KeyEvent.KEYCODE_BUTTON_START
+                    || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_BACK)) closeEndCard();
+            return true;
+        }
         if (menuOpen) {
             if (e.getAction() == KeyEvent.ACTION_DOWN && PadInput.actionFor(code) == PadInput.ACT_MENU
                     && code != KeyEvent.KEYCODE_BACK && code != KeyEvent.KEYCODE_ESCAPE) {
@@ -452,11 +459,64 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
         return o;
     }
 
-    /** A whole game finished without Director's Mode help nor states: its record has a "!". */
+    /**
+     * A whole game finished without Director's Mode help nor states: its record has a "!" and,
+     * once the initials are in, the "thank you for playing" picture is shown.
+     */
     private void onCleanRunRecord(String mark) {
         Log.i(TAG, "clean run record " + mark);
-        runOnUiThread(() -> Toast.makeText(this, "¡Juego completado sin ayudas! Tu récord lleva la marca «!»",
-                Toast.LENGTH_LONG).show());
+        runOnUiThread(this::showEndCard);
+    }
+
+    // --- end card ---------------------------------------------------------------
+    private FrameLayout endCard;
+    private long endCardShownAt;
+
+    private void showEndCard() {
+        if (endCard != null || isFinishing()) return;
+        android.graphics.Bitmap bmp;
+        try (java.io.InputStream in = getAssets().open(END_CARD)) {
+            bmp = android.graphics.BitmapFactory.decodeStream(in);
+        } catch (Exception e) {
+            Log.w(TAG, "end card", e);
+            return;
+        }
+        if (menuOpen) closeMenu();
+        if (emu != null) emu.setPausedState(true);
+        pad.clear();
+        touch.releaseAll();
+        touchMask = 0;
+        NativeBridge.nativeSetButtons(0);
+        FrameLayout card = new FrameLayout(this);
+        card.setBackgroundColor(android.graphics.Color.BLACK);
+        // the same picture, blurred, fills the sides of the wide screen
+        android.widget.ImageView back = new android.widget.ImageView(this);
+        back.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+        back.setImageBitmap(bmp);
+        back.setAlpha(0.45f);
+        if (android.os.Build.VERSION.SDK_INT >= 31)
+            back.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(60f, 60f, android.graphics.Shader.TileMode.CLAMP));
+        card.addView(back, new FrameLayout.LayoutParams(-1, -1));
+        android.widget.ImageView front = new android.widget.ImageView(this);
+        front.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        front.setImageBitmap(bmp);
+        card.addView(front, new FrameLayout.LayoutParams(-1, -1));
+        card.setOnClickListener(v -> closeEndCard());
+        card.setAlpha(0f);
+        root.addView(card, new FrameLayout.LayoutParams(-1, -1));
+        card.animate().alpha(1f).setDuration(900).start();
+        endCard = card;
+        endCardShownAt = android.os.SystemClock.uptimeMillis();
+    }
+
+    private void closeEndCard() {
+        FrameLayout card = endCard;
+        if (card == null || android.os.SystemClock.uptimeMillis() - endCardShownAt < 1500) return;
+        endCard = null;
+        card.animate().alpha(0f).setDuration(500).withEndAction(() -> root.removeView(card)).start();
+        pad.clear();
+        if (emu != null && !menuOpen) emu.setPausedState(false);
+        hideSystemUi();
     }
 
     private void refreshMenu() {
@@ -505,7 +565,7 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
         menu.onResume();
         glView.onResume();
         hideSystemUi();
-        if (emu != null && !menuOpen) emu.setPausedState(false);
+        if (emu != null && !menuOpen && endCard == null) emu.setPausedState(false);
     }
 
     @Override
