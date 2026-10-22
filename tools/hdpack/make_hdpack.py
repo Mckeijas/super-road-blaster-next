@@ -12,7 +12,6 @@ Requirements: Python 3, numpy, opencv-python, ffmpeg/ffprobe in PATH.
     make_hdpack.py patches <film.mp4> <work>                  # clean "?" / pause / screen patches
     make_hdpack.py indicators <film.mp4> <work>               # green screen: clean + prompt icons
     make_hdpack.py pack    <film.mp4> <work> <out.zip>         # hd.mp4 + hdpack.json + patches
-    make_hdpack.py update  <film.mp4> <work> <out.zip>         # same without the film (installed pack)
     make_hdpack.py all     <film.mp4> <game_dir> <work> <out.zip>
 
 How it works
@@ -422,7 +421,7 @@ def lever_images(work):
 
 
 # ------------------------------------------------------------------------------- pack
-def pack(film, work, out_zip, update_only=False):
+def pack(film, work, out_zip):
     al = json.load(open(os.path.join(work, 'align.json')))
     rows = load_track(work)
     pt = json.load(open(os.path.join(work, 'patches.json')))
@@ -461,17 +460,13 @@ def pack(film, work, out_zip, update_only=False):
     }
     images = ('patch_help.png', 'patch_pause.png', 'patch_screen.png', 'lever_up.png', 'lever_mid.png',
               'lever_down.png', 'ind_clean.png', 'ind_left.png', 'ind_right.png', 'ind_brake.png', 'ind_accel.png')
-    if update_only:     # small update for an installed pack: everything except the film
-        with zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_DEFLATED) as z:
-            z.writestr('hdpack.json', json.dumps(pack_json))
-            for f in images:
-                z.write(os.path.join(work, f), f)
-        print('update', out_zip, os.path.getsize(out_zip) // 1024, 'KB')
-        return
     vid = os.path.join(work, 'hd.mp4')
     if not os.path.exists(vid):
         run(['ffmpeg', '-v', 'error', '-y', '-i', film, '-map', '0:v:0', '-c', 'copy', '-an', '-dn',
              '-movflags', '+faststart', vid])
+    # One file for everything. The film goes LAST and stored (its size is in the local header):
+    # the app reads the small files first and, if the same film is already installed, stops
+    # there instead of copying 600 MB again.
     with zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_STORED) as z:
         z.writestr('hdpack.json', json.dumps(pack_json))
         for f in images:
@@ -500,8 +495,6 @@ def main():
         indicators(a[1], a[2])
     elif cmd == 'pack':
         pack(a[1], a[2], a[3])
-    elif cmd == 'update':
-        pack(a[1], a[2], a[3], update_only=True)
     elif cmd == 'all':
         film, game, work, out = a[1:5]
         align(film, game, work)

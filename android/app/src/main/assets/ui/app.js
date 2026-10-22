@@ -540,7 +540,7 @@
     let h = '<div class="section-title">Pack HD · add-on opcional</div><div class="opts stagger">';
     if (on) h += optRow('hdVideo');
     h += actionRow('importHd', on ? 'Reinstalar el pack HD' : 'Instalar el pack HD (.zip)',
-      'Elige SRBN-PackHD.zip (o una actualización SRBN-PackHD-update.zip), creado con tools/hdpack a partir de tu copia de la película HD.', 'Ⓐ Elegir .zip');
+      'Elige SRBN-PackHD.zip, creado con tools/hdpack a partir de tu copia de la película HD. Si ya está instalado con la misma película, solo se actualizan sus datos (unos segundos).', 'Ⓐ Elegir .zip');
     if (on) h += actionRow('removeHd', 'Desinstalar el pack HD', 'Libera ' + (S.hdSizeMb | 0) + ' MB. El juego sigue funcionando con el vídeo original.', 'Ⓐ Borrar');
     h += '</div><p class="note">' + (on
       ? 'Instalado. En los capítulos de la historia verás la película en alta definición; el salpicadero muestra tus puntos y vidas, y la palanca de la derecha sube al acelerar y baja al frenar. Los choques y las pantallas propias del juego usan el vídeo original.'
@@ -1089,7 +1089,7 @@
     $('.ph', o).textContent = hd ? 'Pack HD' : scenes ? 'Paso 2 de 2' : 'Paso 1 de 2';
     $('h2', o).textContent = hd ? 'Instalando la película HD' : scenes ? 'Preparando escenas y miniaturas' : 'Copiando el juego';
     $('.bar b', o).style.width = (st.percent | 0) + '%';
-    $('p', o).textContent = (st.percent | 0) + ' % · ' + (hd ? 'copiando unos 600 MB, no cierres la app'
+    $('p', o).textContent = (st.percent | 0) + ' % · ' + (hd ? 'instalando el pack, no cierres la app'
       : scenes ? 'la app recorre la aventura en modo automático, solo esta vez'
       : 'leyendo el .zip y comprobando los archivos');
     clearTimeout(impTimer);

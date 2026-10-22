@@ -152,12 +152,19 @@ public final class GameImporter {
         File staging = new File(ctx.getFilesDir(), "hd_import");
         deleteTree(staging);
         staging.mkdirs();
+        // A pack with the same film as the one installed only replaces the small files (the film
+        // is the last entry of the zip and is not copied again), so it needs no extra room.
+        File dst = new File(ctx.getFilesDir(), "hd");
+        File oldVideo = new File(dst, "hd.mp4");
+        long oldVideoSize = oldVideo.isFile() ? oldVideo.length() : -1;
         long free = new StatFs(ctx.getFilesDir().getAbsolutePath()).getAvailableBytes();
-        if (zipSize > 0 && free < zipSize + (64L << 20)) {
+        long need = zipSize > 0 && oldVideoSize > 0 ? Math.max(0, zipSize - oldVideoSize) : zipSize;
+        if (zipSize > 0 && free < need + (64L << 20)) {
             deleteTree(staging);
             throw new IOException(String.format(Locale.ROOT,
-                    "No hay espacio suficiente: hacen falta unos %d MB libres.", (zipSize + (64L << 20)) >> 20));
+                    "No hay espacio suficiente: hacen falta unos %d MB libres.", (need + (64L << 20)) >> 20));
         }
+        boolean sameFilm = false;
         java.util.Set<String> wanted = new java.util.HashSet<>(java.util.Arrays.asList(HD_FILES));
         java.util.Set<String> got = new java.util.HashSet<>();
         try (InputStream raw = ctx.getContentResolver().openInputStream(uri)) {
@@ -171,6 +178,10 @@ public final class GameImporter {
                     String name = e.getName();
                     String base = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1);
                     if (!wanted.contains(base)) continue;
+                    if (base.equals("hd.mp4") && oldVideoSize > 0 && e.getSize() == oldVideoSize) {
+                        sameFilm = true;           // film already installed: keep it, stop reading
+                        break;
+                    }
                     try (OutputStream os = new FileOutputStream(new File(staging, base))) {
                         int r;
                         while ((r = zin.read(buf)) > 0) {
@@ -187,17 +198,15 @@ public final class GameImporter {
             if (e instanceof java.util.zip.ZipException) throw new IOException("El archivo no es un .zip válido.");
             throw e;
         }
-        File dst = new File(ctx.getFilesDir(), "hd");
-        File oldVideo = new File(dst, "hd.mp4");
-        boolean update = got.contains("hdpack.json") && !got.contains("hd.mp4") && oldVideo.isFile();
-        if (!got.contains("hdpack.json") || (!got.contains("hd.mp4") && !update)) {
+        // same film (or an old pack without film): keep the film already installed
+        boolean keepFilm = got.contains("hdpack.json") && !got.contains("hd.mp4") && oldVideo.isFile();
+        if (!got.contains("hdpack.json") || (!got.contains("hd.mp4") && !keepFilm)) {
             deleteTree(staging);
             throw new IOException(got.contains("hdpack.json")
-                    ? "Es una actualización del pack HD: primero instala el pack completo."
+                    ? "Falta la película: elige el pack completo SRBN-PackHD.zip."
                     : "El .zip no es un pack HD de SRBN.");
         }
-        // update zip (no film inside): keep the film already installed
-        if (update && !oldVideo.renameTo(new File(staging, "hd.mp4"))) {
+        if (keepFilm && !oldVideo.renameTo(new File(staging, "hd.mp4"))) {
             deleteTree(staging);
             throw new IOException("No se pudo actualizar el pack HD.");
         }
@@ -207,7 +216,7 @@ public final class GameImporter {
             deleteTree(dst);
             throw new IOException("El pack HD está dañado.");
         }
-        Log.i(TAG, "hd pack installed");
+        Log.i(TAG, "hd pack installed" + (sameFilm ? " (film kept)" : ""));
     }
 
     // ------------------------------------------------------------------ 1. copy the zip
