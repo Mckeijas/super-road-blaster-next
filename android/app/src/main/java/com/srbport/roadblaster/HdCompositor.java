@@ -94,16 +94,28 @@ final class HdCompositor {
         ok = progOes != 0 && progSprite != 0;
     }
 
+    private int lastFilmTrack = -1;   // last chapter shown with the film
+
     /** Sets the film time for the current game picture and reports whether HD can be shown. */
     boolean prepare(int track, int audioPos) {
         double t = pack.filmTime(track, audioPos);
         if (Double.isNaN(t)) {
             video.setActive(false);
+            // A crash scene (game video) is followed by the same chapter from its start: have
+            // that film frame decoded and waiting, so the HD picture comes back at once.
+            if (isCrashScene(track) && lastFilmTrack >= 0) video.setPreroll(pack.filmTime(lastFilmTrack, 0));
             return false;
         }
+        lastFilmTrack = track;
+        video.setPreroll(-1);
         video.setTarget(t);
         video.setActive(true);
         return ok && video.synced();
+    }
+
+    /** Chapters not in the film other than game over (0), high scores (1) and the logo (121). */
+    private boolean isCrashScene(int track) {
+        return track > 1 && track != 121 && track < pack.chapterStart.length && Double.isNaN(pack.chapterStart[track]);
     }
 
     void setActive(boolean a) { video.setActive(a); }
@@ -132,7 +144,11 @@ final class HdCompositor {
         // the game's own prompts (the film's green screen follows the iOS timing, which is
         // not always the game's): left / right / brake / accelerate
         int prompts = pack.hasIndicators ? NativeBridge.nativePromptsAt(track, audioPos) : 0;
-        if (!Double.isNaN(t) && pack.dashboardAt(t, off)) {
+        // dress the dashboard of the frame really on screen (not the one asked for), so the
+        // patches never come in late or stay after a cut
+        double shown = video.shownTime();
+        double td = !Double.isNaN(t) && shown >= 0 && Math.abs(shown - t) < 0.5 ? shown : t;
+        if (!Double.isNaN(td) && pack.dashboardAt(td, off)) {
             // 2. iOS dashboard, dressed for this game
             float ox = off[0], oy = off[1];
             floatAlpha = 0f;

@@ -39,13 +39,13 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.7-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.8-release.apk`
    (unos pocos MB: el juego se carga después desde la app).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
 
 ### Versiones y nombre de la APK
-La versión está en `android/gradle.properties` → `srbVersion=1.7.7`. **Súbela antes de cada
+La versión está en `android/gradle.properties` → `srbVersion=1.7.8`. **Súbela antes de cada
 build que vayas a instalar** (1.6.0 → 1.6.1 para arreglos, 1.7.0 para novedades). La APK sale
 con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
 *Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
@@ -67,7 +67,7 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.7-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.8-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ### Primera vez: cargar el juego
@@ -115,6 +115,10 @@ de menú sintetizados para el port. Fuente de menús: Kaushan Script.
 - **Selector de escenas**: los tramos de recorrido de cada nivel, con mapa de niveles (L/R)
   y vista previa en vídeo.
 
+**Puntuación justa**: algunas maniobras piden dos cosas a la vez (por ejemplo, frenar y girar).
+En el juego original cada parte puntuaba al hacerla aunque la otra fallara y acabaras chocando;
+aquí, si la maniobra termina en choque, los puntos de esa maniobra no cuentan.
+
 ### Gráficos · restauración HD
 - **Restauración HD**: limpieza del ruido del códec MSU-1 → reescalado con reconstrucción
   de bordes **AMD FSR 1.0 EASU** → nitidez adaptativa y refuerzo del trazo del anime.
@@ -138,6 +142,9 @@ aciertos y choques. Se instala aparte, ocupa ~600 MB y se puede borrar cuando qu
   flechas rojas de SNES. Los avisos que traía grabados la película (seguían otra versión) quedan
   tapados también en los planos en los que el salpicadero se desplaza. En los planos sin
   salpicadero, la pantalla verde aparece sola mientras haya un aviso.
+- Tras un choque, la película queda preparada en el punto donde se reanuda mientras se ve la
+  escena del choque, así que el salpicadero HD vuelve al instante. Los retoques del salpicadero
+  siguen el fotograma que hay en pantalla, sin adelantarse ni quedarse atrás en los cortes.
 - Escenas de choque, logos y pantallas propias del juego usan el vídeo original.
 
 **Crear el pack** (en el PC, una sola vez, con tu propia copia de la película HD; hacen falta

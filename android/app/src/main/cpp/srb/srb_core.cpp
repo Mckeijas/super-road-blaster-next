@@ -385,6 +385,12 @@ struct State {
     std::atomic<int> hudPrompts{-1};
     int oopAlign = -1;             // offset (mod 16) of the game's object stack records
 
+    // Fair score: points of a manoeuvre that ends in a crash are taken back (see scoreGuardTick)
+    int sgTrack = -1;              // track seen on the previous frame
+    int sgStory = -1;              // story chapter being recorded (-1 = none)
+    int sgLastVf = -1;
+    std::vector<std::pair<int, int>> sgHist;   // (video frame, score) in sgStory
+
     // Infinite-lives ROM patch
     size_t loseLifeDec = 0;        // offset of "DEC dp" inside the ROM, 0 = not found
     uint8_t loseLifeOrig[2] = {0, 0};
@@ -803,6 +809,76 @@ void shutdown() {
     g = nullptr;
 }
 
+namespace {
+// Player object direct page (see playerStats), -1 when not in play.
+int playerDp() {
+    if (!g || !g->loaded) return -1;
+    const uint8_t *w = Memory.RAM;
+    for (int o = 0x6000; o < 0x7000; o += 2) {
+        if (w[o + 1] != 52 || !(w[o] & 0x01)) continue;
+        int dp = w[o + 8] | (w[o + 9] << 8);
+        if (dp <= 0 || dp + 36 >= 0x2000) continue;
+        if (w[dp + 34] > 20) continue;
+        return dp;
+    }
+    return -1;
+}
+
+bool isCrashChapter(int track) {
+    return track >= 0 && track < (int)g->chapters.size() &&
+           g->chapters[(size_t)track].name.find("crash") != std::string::npos;
+}
+
+// Some manoeuvres ask for two things at once (e.g. brake + left) and each part scores the moment
+// it is done, so the game used to keep those points even when the other part failed and the car
+// crashed. When a crash scene starts, the score goes back to what it was before the group of
+// overlapping prompts that was running when the story chapter stopped.
+void scoreGuardTick() {
+    int track = trackNow();
+    int dp = playerDp();
+    if (dp < 0) { g->sgTrack = track; return; }
+    uint8_t *w = Memory.RAM;
+    int score = w[dp + 28] | (w[dp + 29] << 8);
+    if (track != g->sgTrack && track >= 0) {
+        if (isCrashChapter(track)) {
+            if (g->sgStory >= 0 && g->sgLastVf >= 0 && !g->sgHist.empty()) {
+                const auto &ev = g->chapters[(size_t)g->sgStory].events;
+                int lo = 1 << 30, hi = -(1 << 30);
+                for (const QteEvent &e : ev)
+                    if (e.start <= g->sgLastVf && g->sgLastVf <= e.end + 3) { lo = std::min(lo, e.start); hi = std::max(hi, e.end); }
+                for (bool grew = lo <= hi; grew;) {          // whole group of overlapping prompts
+                    grew = false;
+                    for (const QteEvent &e : ev)
+                        if (e.start <= hi && e.end >= lo && (e.start < lo || e.end > hi)) {
+                            lo = std::min(lo, e.start); hi = std::max(hi, e.end); grew = true;
+                        }
+                }
+                if (lo <= hi) {
+                    int base = g->sgHist.front().second;
+                    for (const auto &h : g->sgHist) { if (h.first >= lo) break; base = h.second; }
+                    if (score > base) {
+                        w[dp + 28] = (uint8_t)(base & 0xFF);
+                        w[dp + 29] = (uint8_t)(base >> 8);
+                        logf("[srb] crash in chapter %d: score %d -> %d\n", g->sgStory, score, base);
+                    }
+                }
+            }
+            g->sgStory = -1;
+        } else {
+            g->sgStory = track;
+        }
+        g->sgHist.clear();
+        g->sgLastVf = -1;
+    }
+    g->sgTrack = track;
+    if (track >= 0 && track == g->sgStory) {
+        int vf = videoFrameNow();
+        if (vf != g->sgLastVf) { g->sgHist.emplace_back(vf, score); g->sgLastVf = vf; }
+        else if (!g->sgHist.empty()) g->sgHist.back().second = score;
+    }
+}
+} // namespace
+
 int runFrame(int16_t *out, int maxFrames) {
     if (!g || !g->loaded || g->paused.load()) return 0;
     applyLivesPatch();
@@ -812,6 +888,7 @@ int runFrame(int16_t *out, int maxFrames) {
 
     g->audio.clear();
     retro_run();
+    scoreGuardTick();
 
     int frames = (int)(g->audio.size() / 2);
     float sp = g->speed.load();

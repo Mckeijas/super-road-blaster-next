@@ -30,7 +30,9 @@ public final class HdVideo implements SurfaceTexture.OnFrameAvailableListener {
     private volatile boolean running;
     private volatile boolean active;
     private volatile double target = -1;
-    private volatile double rendered = -1;       // film time of the frame on the texture
+    private volatile double rendered = -1;       // film time of the last frame sent to the texture
+    private volatile double preroll = -1;        // while inactive: film time to have ready
+    private double shown = -1;                   // GL thread: film time of the frame on the texture
     private volatile boolean frameReady;
     private volatile long lastSeekNanos;
 
@@ -42,6 +44,7 @@ public final class HdVideo implements SurfaceTexture.OnFrameAvailableListener {
         // the first frame comes back after a quick seek
         if (texture != null) release();
         rendered = -1;
+        shown = -1;
         frameReady = false;
         texture = new SurfaceTexture(oesTexture);
         texture.setOnFrameAvailableListener(this);
@@ -54,6 +57,16 @@ public final class HdVideo implements SurfaceTexture.OnFrameAvailableListener {
     public void setTarget(double t) { target = t; }
     public void setActive(boolean a) { active = a; }
 
+    /**
+     * While the film is not shown (e.g. during a crash scene, which uses the game's own video),
+     * seek and decode up to film time t and keep that frame ready, so that when the game jumps
+     * there the HD picture is on screen at once instead of after a keyframe seek. -1 = none.
+     */
+    public void setPreroll(double t) { preroll = t; }
+
+    /** GL thread: film time of the frame currently on the texture (-1 = unknown). */
+    public double shownTime() { return shown; }
+
     /** The texture shows (almost) the frame for the current target. */
     public boolean synced() {
         double r = rendered, t = target;
@@ -65,7 +78,11 @@ public final class HdVideo implements SurfaceTexture.OnFrameAvailableListener {
         if (texture == null) return;
         if (frameReady) {
             frameReady = false;
-            try { texture.updateTexImage(); } catch (Exception e) { Log.w(TAG, "updateTexImage", e); }
+            try {
+                texture.updateTexImage();
+                long ns = texture.getTimestamp();          // = presentation time set by the decoder
+                shown = ns > 0 ? ns / 1e9 : rendered;
+            } catch (Exception e) { Log.w(TAG, "updateTexImage", e); }
         }
         texture.getTransformMatrix(texMatrix);
     }
@@ -109,11 +126,13 @@ public final class HdVideo implements SurfaceTexture.OnFrameAvailableListener {
             double pendingTime = -1, newest = -1;
             boolean needSeek = true;
             while (running) {
-                if (!active || target < 0) {
+                // active: follow the game; inactive with a preroll: get that frame ready, unseen
+                boolean show = active && target >= 0;
+                double t = show ? target : preroll;
+                if (t < 0) {
                     sleep(15);
                     continue;
                 }
-                double t = target;
                 // far from what we have: jump (keyframes are 1-5 s apart, the rest decodes fast)
                 if (!needSeek && newest >= 0 && (t < newest - 0.25 || t > newest + 2.0)) needSeek = true;
                 if (needSeek) {
@@ -126,20 +145,20 @@ public final class HdVideo implements SurfaceTexture.OnFrameAvailableListener {
                     needSeek = false;
                     lastSeekNanos = System.nanoTime();
                 }
-                // feed the decoder
-                if (!inputDone) {
+                // feed the decoder (several samples at a time while catching up after a seek)
+                for (int k = 0; k < 4 && !inputDone; k++) {
                     int in = codec.dequeueInputBuffer(0);
-                    if (in >= 0) {
-                        ByteBuffer buf = codec.getInputBuffer(in);
-                        int n = buf == null ? -1 : ex.readSampleData(buf, 0);
-                        if (n < 0) {
-                            codec.queueInputBuffer(in, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
-                            inputDone = true;
-                        } else {
-                            codec.queueInputBuffer(in, 0, n, ex.getSampleTime(), 0);
-                            ex.advance();
-                        }
+                    if (in < 0) break;
+                    ByteBuffer buf = codec.getInputBuffer(in);
+                    int n = buf == null ? -1 : ex.readSampleData(buf, 0);
+                    if (n < 0) {
+                        codec.queueInputBuffer(in, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                        inputDone = true;
+                    } else {
+                        codec.queueInputBuffer(in, 0, n, ex.getSampleTime(), 0);
+                        ex.advance();
                     }
+                    if (newest >= 0 && newest > t - 0.25) break;   // near the target: one at a time
                 }
                 // take one decoded frame and show it when its time comes
                 if (pending < 0) {
@@ -156,16 +175,18 @@ public final class HdVideo implements SurfaceTexture.OnFrameAvailableListener {
                     }
                 }
                 if (pending >= 0) {
-                    t = target;
+                    show = active && target >= 0;
+                    t = show ? target : preroll;
+                    if (t < 0) continue;
                     if (pendingTime < t - 1.5 * FRAME) {          // late: skip it
                         codec.releaseOutputBuffer(pending, false);
                         pending = -1;
-                    } else if (pendingTime <= t + 0.5 * FRAME) {  // its turn
+                    } else if (pendingTime <= t + 0.5 * FRAME && show) {  // its turn
                         codec.releaseOutputBuffer(pending, true);
                         rendered = pendingTime;
                         pending = -1;
                     } else {
-                        sleep(2);                                  // early: wait for the game
+                        sleep(2);              // early, or ready for a preroll: wait for the game
                     }
                 }
             }
