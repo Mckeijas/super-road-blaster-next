@@ -511,7 +511,7 @@
     const fmt = (n) => String(n).padStart(7, '0');
     const isDefault = list.length && list[0].defaults;
     const rows = list.map((e, i) => '<div class="rec' + (i === 0 ? ' top' : '') + '" style="animation-delay:' + (0.06 * i) + 's">' +
-      '<span class="pos">' + (i + 1) + '</span><span class="nm">' + esc(e.name || '???') + '</span>' +
+      '<span class="pos">' + (i + 1) + '</span><span class="nm">' + esc(e.name || '???') + (e.mark ? '<b class="mark">!</b>' : '') + '</span>' +
       '<span class="dots"></span><span class="sc">' + fmt(e.score) + '</span></div>').join('');
     const t = hasThumb(112) ? thumb(112) : thumb(3);
     return '<div class="section-title">Récords</div><div class="records">' +

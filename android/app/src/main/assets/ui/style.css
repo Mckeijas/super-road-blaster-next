@@ -437,6 +437,8 @@ body.minimode .mini { display: flex; position: fixed; inset: 0; z-index: 10; fle
 .rec.top { font-size: calc(var(--u) * 2.9); }
 .rec.top .pos { color: var(--sun3); }
 .rec.top .nm, .rec.top .sc { color: #fff; text-shadow: 0 0 1.2vh var(--sun1), 0 0 3vh rgba(255,45,111,0.6); }
+/* record of a whole game without Director's Mode help: "!" after the initials */
+.rec .nm .mark { color: var(--sun3); letter-spacing: 0; margin-left: -0.15em; text-shadow: 0 0 1.2vh var(--sun1); }
 .recnote { margin-top: calc(var(--u) * 1.6); color: var(--muted); font-size: calc(var(--u) * 1.25); line-height: 1.5; }
 
 /* v1.7.2 · moving scene previews (canvas over the thumbnail) */

@@ -39,13 +39,13 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.10-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.8.0-release.apk`
    (unos pocos MB: el juego se carga después desde la app).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
 
 ### Versiones y nombre de la APK
-La versión está en `android/gradle.properties` → `srbVersion=1.7.10`. **Súbela antes de cada
+La versión está en `android/gradle.properties` → `srbVersion=1.8.0`. **Súbela antes de cada
 build que vayas a instalar** (1.6.0 → 1.6.1 para arreglos, 1.7.0 para novedades). La APK sale
 con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
 *Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
@@ -67,7 +67,7 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.10-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.8.0-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ### Primera vez: cargar el juego
@@ -114,6 +114,13 @@ de menú sintetizados para el port. Fuente de menús: Kaushan Script.
 - **Marcador**: ocultar puntos y flechas (también con **R3**).
 - **Selector de escenas**: los tramos de recorrido de cada nivel, con mapa de niveles (L/R)
   y vista previa en vídeo.
+
+**Récord con «!»**: si terminas el juego entero desde *Nueva partida* sin ninguna ayuda del
+Director's Mode (QTE asistido o automático, invencibilidad, cámara lenta, ver la película) y sin
+cargar partidas, usar el selector de escenas ni reiniciar escena, tus iniciales llevan una **!**
+al introducirlas y en el *Hall of Fame* (por ejemplo `01.MCK!:0724000`), y también en *Récords*
+del launcher. Puedes perder vidas: si llegas al game over, la partida acaba y la siguiente
+empieza de cero. *Continuar* retoma la misma partida, así que no la invalida.
 
 **Puntuación justa**: algunas maniobras piden dos cosas a la vez (por ejemplo, frenar y girar).
 En el juego original cada parte puntuaba al hacerla aunque la otra fallara y acabaras chocando;

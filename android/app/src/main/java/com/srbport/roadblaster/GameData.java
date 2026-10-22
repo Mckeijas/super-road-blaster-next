@@ -87,12 +87,20 @@ public final class GameData {
             for (int i = 0; i < 5; i++) { list.add(new long[]{50 - i * 10, names.size()}); names.add("D4S"); }
         }
         list.sort((x, y) -> Long.compare(y[0], x[0]));
+        // records made by clean runs (whole game, no Director's Mode help, no states): "NAM 724"
+        java.util.List<String> marks = new java.util.ArrayList<>();
+        try {
+            for (String l : new String(readFile(new File(saveDir(ctx), "SuperRoadBlaster.marks")), "UTF-8").split("\n"))
+                if (!l.trim().isEmpty()) marks.add(l.trim());
+        } catch (Exception ignored) {
+        }
         org.json.JSONArray out = new org.json.JSONArray();
         try {
             for (long[] e : list) {
                 org.json.JSONObject o = new org.json.JSONObject();
                 o.put("name", names.get((int) e[1]));
                 o.put("score", e[0] * 1000);
+                o.put("mark", marks.remove(names.get((int) e[1]) + " " + e[0]));
                 o.put("defaults", !saved);
                 out.put(o);
             }

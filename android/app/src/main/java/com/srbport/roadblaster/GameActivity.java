@@ -156,7 +156,8 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
                 File f = GameData.slotFile(this, Integer.parseInt(arg));
                 if (f.exists()) state = GameData.readFile(f);
             }
-            if (state != null && !NativeBridge.nativeLoadState(state)) {
+            boolean resume = "resume".equals(mode);
+            if (state != null && !(resume ? NativeBridge.nativeResumeState(state) : NativeBridge.nativeLoadState(state))) {
                 Log.w(TAG, "state load failed");
                 // "Continuar" saved by an older version after the game had stopped: start that
                 // stretch of road again from its beginning instead
@@ -221,6 +222,8 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
     public void onFrame() {
         int ch = NativeBridge.nativeCurrentChapter();
         if (ch >= 0) lastChapter = ch;
+        String mark = NativeBridge.nativeTakeNewMark();
+        if (mark != null) onCleanRunRecord(mark);
         glView.requestRender();
     }
 
@@ -447,6 +450,13 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
         } catch (Exception ignored) {
         }
         return o;
+    }
+
+    /** A whole game finished without Director's Mode help nor states: its record has a "!". */
+    private void onCleanRunRecord(String mark) {
+        Log.i(TAG, "clean run record " + mark);
+        runOnUiThread(() -> Toast.makeText(this, "¡Juego completado sin ayudas! Tu récord lleva la marca «!»",
+                Toast.LENGTH_LONG).show());
     }
 
     private void refreshMenu() {

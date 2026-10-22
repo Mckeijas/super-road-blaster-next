@@ -43,6 +43,8 @@ public final class NativeBridge {
     public static native void nativeSetOption(int id, float value);
     public static native byte[] nativeSaveState();
     public static native boolean nativeLoadState(byte[] state);
+    public static native boolean nativeResumeState(byte[] state);   // "Continuar"
+    public static native String nativeTakeNewMark();               // "NAM 724" or null
     public static native void nativeSaveSram();
     public static native int nativeCopyFrame(ByteBuffer dst, int[] info);
     /** info = {width, height, hdOverlay, track, audioSample, keyColorRgb565}. */

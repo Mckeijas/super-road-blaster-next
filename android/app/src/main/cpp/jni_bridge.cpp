@@ -145,6 +145,22 @@ JNIFN(jboolean, nativeLoadState)(JNIEnv *env, jclass, jbyteArray data) {
     return srb::loadState(st) ? JNI_TRUE : JNI_FALSE;
 }
 
+// "Continuar": the same game, keeps its clean-run status
+JNIFN(jboolean, nativeResumeState)(JNIEnv *env, jclass, jbyteArray data) {
+    jsize n = env->GetArrayLength(data);
+    std::vector<uint8_t> st((size_t)n);
+    env->GetByteArrayRegion(data, 0, n, (jbyte *)st.data());
+    return srb::loadState(st, true) ? JNI_TRUE : JNI_FALSE;
+}
+
+// "NAM 724" when a clean run has just made its record, else null
+JNIFN(jstring, nativeTakeNewMark)(JNIEnv *env, jclass) {
+    std::string name;
+    int score = 0;
+    if (!srb::takeNewMark(name, score)) return nullptr;
+    return env->NewStringUTF((name + " " + std::to_string(score)).c_str());
+}
+
 JNIFN(void, nativeSaveSram)(JNIEnv *, jclass) { srb::saveSram(); }
 
 // Copies the newest frame (RGB565) into a direct ByteBuffer.

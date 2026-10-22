@@ -10,6 +10,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <mutex>
+#include <fstream>
 #include <sstream>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -18,6 +19,7 @@
 // Snes9x internals (statically linked) for MSU-1 state, WRAM, ROM and PPU layers.
 #include "snes9x.h"
 #include "memmap.h"
+#include "ppu.h"
 #include "msu1.h"
 #include "stream.h"
 #include "apu/apu.h"
@@ -385,6 +387,19 @@ struct State {
     // every picture: bit 0 left, 1 right, 2 brake, 3 accelerate. -1 = not found yet.
     std::atomic<int> hudPrompts{-1};
     int oopAlign = -1;             // offset (mod 16) of the game's object stack records
+
+    // Clean run (see runTick): a whole game from power-on without Director's Mode help nor
+    // loading states earns a "!" next to its initials.
+    bool runClean = true;          // no help / state load since power-on or the last game over
+    bool runDone = false;          // finished cleanly: waiting for the initials
+    int runScore = -1;             // final score of that run
+    int runTrack = -1, runLastStory = -1;
+    std::vector<std::pair<std::string, int>> runBefore;  // score records before the entry
+    std::vector<std::pair<std::string, int>> marks;      // records earned by clean runs
+    std::string marksPath;
+    std::mutex runMutex;
+    std::string newMarkName;       // last mark added (for the app), empty = none
+    int newMarkScore = -1;
 
     // Fair score: points of a manoeuvre that ends in a crash are taken back (see scoreGuardTick)
     int sgTrack = -1;              // track seen on the previous frame
@@ -800,6 +815,8 @@ void romFixups(std::vector<uint8_t> &rom) {
     rom[ptr + 1] = (uint8_t)((to >> 8) & 0xFF);
 }
 
+namespace { void loadMarks(); }
+
 bool init(const Config &cfg) {
     if (g) shutdown();
     g = new State();
@@ -840,6 +857,8 @@ bool init(const Config &cfg) {
     }
 
     findExceptionHandler();
+    g->marksPath = sysDir + "/SuperRoadBlaster.marks";
+    loadMarks();
     g->loseLifeDec = findLoseLife();
     if (g->loseLifeDec) memcpy(g->loseLifeOrig, Memory.ROM + g->loseLifeDec, 2);
     logf("[srb] loaded: fps=%.3f chapters=%zu loseLife@%zx\n", g->fps, g->chapters.size(), g->loseLifeDec);
@@ -930,6 +949,148 @@ void scoreGuardTick() {
         else if (!g->sgHist.empty()) g->sgHist.back().second = score;
     }
 }
+
+// ---------------------------------------------------------------------------
+// Clean run: a game started from power-on (or after a game over) and finished with no help
+// from Director's Mode (automatic QTE, infinite lives, slow motion, film mode) and no state
+// loaded (scene select, restart scene, saved games; "Continuar" keeps the run). Finishing the
+// last stretch (level9_checkpoint5) goes straight to the game-over screen (chapter 0) and then
+// to the name entry; the record made there is remembered and gets a "!" after its initials on
+// the name entry and in the hall of fame, written into the game's own text layer.
+constexpr int kOidScore = 55, kFinalChapter = 112;
+
+// High-score records as the game saves them in battery RAM (core.persistency): block
+// 37 13 <len16> .. { 38 13 ?? <size> <object data, ends with score16 name[4] lives> } .. 39 13
+std::vector<std::pair<std::string, int>> scoreRecords() {
+    std::vector<std::pair<std::string, int>> out;
+    const uint8_t *d = (const uint8_t *)retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    size_t n = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    if (!d || n < 8 || d[0] != 0x37 || d[1] != 0x13) return out;
+    size_t len = d[2] | (d[3] << 8);
+    if (len <= 8 || len > n || d[len - 2] != 0x39 || d[len - 1] != 0x13) return out;
+    size_t p = 6;
+    while (p + 4 <= len - 2 && d[p] == 0x38 && d[p + 1] == 0x13) {
+        size_t size = d[p + 3], data = p + 4;
+        if (size >= 7 && data + size <= len - 2) {
+            size_t e = data + size;
+            std::string name;
+            for (size_t k = e - 5; k < e - 1 && d[k]; ++k) name += (char)d[k];
+            if (name.size() == 3) out.emplace_back(name, d[e - 7] | (d[e - 6] << 8));
+        }
+        p = data + size;
+    }
+    return out;
+}
+
+void loadMarks() {
+    g->marks.clear();
+    std::ifstream f(g->marksPath);
+    std::string name; int score;
+    while (f >> name >> score) if (name.size() == 3) g->marks.emplace_back(name, score);
+}
+
+void saveMarks() {
+    std::ofstream f(g->marksPath, std::ios::trunc);
+    for (const auto &m : g->marks) f << m.first << ' ' << m.second << '\n';
+}
+
+// The 16x16 text layer (BG2): one character = 2x2 tiles, tile (c - $20) * 4 + 0..3, the
+// screen is 16 x 14 characters on a 32x32 tilemap.
+uint16_t *textMap() { return (uint16_t *)(Memory.VRAM + ((PPU.BG[1].SCBase << 1) & 0xF800)); }
+
+int textChar(const uint16_t *m, int cx, int cy) {
+    uint16_t e = m[(cy * 2) * 32 + cx * 2];
+    int t = e & 0x3FF;
+    if ((t & 3) || t >= 96 * 4) return -1;
+    return 0x20 + (t >> 2);
+}
+
+void textPut(uint16_t *m, int cx, int cy, int c) {
+    int i = (cy * 2) * 32 + cx * 2;
+    uint16_t attr = m[i] & 0xFC00, t = (uint16_t)((c - 0x20) * 4);
+    m[i] = attr | t; m[i + 1] = attr | (t + 1);
+    m[i + 32] = attr | (t + 2); m[i + 33] = attr | (t + 3);
+}
+
+void drawMarks() {
+    uint16_t *m = textMap();
+    std::string rows[14];
+    for (int cy = 0; cy < 14; ++cy)
+        for (int cx = 0; cx < 16; ++cx) { int c = textChar(m, cx, cy); rows[cy] += c < 0 ? '\x01' : (char)c; }
+    bool entry = false, fame = false;
+    auto marks = g->marks;                          // each record marks one row
+    for (auto &r : rows) { if (r.find("Enter name") != std::string::npos) entry = true;
+                           if (r.find("HALL OF FAME") != std::string::npos) fame = true; }
+    for (int cy = 0; cy < 14; ++cy) {
+        const std::string &r = rows[cy];
+        if (entry && g->runDone) {
+            // "NAM :123000" -> "NAM!:123000" while entering the initials of a clean run
+            size_t p = r.find(" :");
+            if (p != std::string::npos && p >= 3) textPut(m, (int)p, cy, '!');
+        } else if (fame) {
+            // "1.NAM:123000" -> "1.NAM!:123000" for the records of clean runs
+            size_t dot = r.find('.');
+            if (dot == std::string::npos || dot + 6 > r.size()) continue;
+            bool done = r[dot + 4] == '!';          // already written on an earlier frame
+            size_t colon = dot + (done ? 5 : 4);
+            if (r[colon] != ':') continue;
+            std::string name = r.substr(dot + 1, 3);
+            size_t end = colon + 1;
+            while (end < r.size() && r[end] >= '0' && r[end] <= '9') ++end;
+            if (end < colon + 5 || r.compare(end - 3, 3, "000") != 0) continue;   // "<score>000"
+            int score = atoi(r.substr(colon + 1, end - 3 - (colon + 1)).c_str());
+            auto it = std::find(marks.begin(), marks.end(), std::make_pair(name, score));
+            if (it == marks.end()) continue;
+            marks.erase(it);
+            if (done || r[15] != ' ') continue;
+            for (int cx = 15; cx > (int)dot + 4; --cx) textPut(m, cx, cy, (unsigned char)r[cx - 1]);
+            textPut(m, (int)dot + 4, cy, '!');
+        }
+    }
+}
+
+void runTick() {
+    if (g->autoQte.load() != QTE_OFF || g->infiniteLives.load() || g->movieMode.load() || g->speed.load() < 0.99f)
+        g->runClean = false;
+    int tr = trackNow();
+    if (tr >= 0 && tr != g->runTrack) {
+        if (tr == 0) {                              // game-over screen: end of this game
+            if (g->runClean && g->runLastStory == kFinalChapter) {
+                int s = 0, l = 0;
+                if (playerStats(&s, &l)) {
+                    g->runDone = true;
+                    g->runScore = s;
+                    g->runBefore = scoreRecords();
+                    logf("[srb] clean run finished, score %d\n", s);
+                }
+            }
+            g->runClean = true;                     // the next game starts from the title
+            g->runLastStory = -1;
+        } else if (tr != 1) {
+            g->runLastStory = tr;
+            if (g->runDone && (tr == 2 || tr == 3 || tr == 121)) g->runDone = false;   // missed
+        }
+        g->runTrack = tr;
+    }
+    if (g->runDone) {
+        auto now = scoreRecords();
+        for (const auto &r : now) {
+            if (r.second != g->runScore) continue;
+            int a = 0, b = 0;
+            for (const auto &x : now) if (x == r) a++;
+            for (const auto &x : g->runBefore) if (x == r) b++;
+            if (a <= b) continue;                   // the record just made
+            g->marks.push_back(r);
+            saveMarks();
+            { std::lock_guard<std::mutex> lk(g->runMutex); g->newMarkName = r.first; g->newMarkScore = r.second; }
+            logf("[srb] clean run record: %s %d\n", r.first.c_str(), r.second);
+            g->runDone = false;
+            g->runBefore.clear();
+            break;
+        }
+    }
+    if (tr == 1 && (g->runDone || !g->marks.empty())) drawMarks();
+}
 } // namespace
 
 int runFrame(int16_t *out, int maxFrames) {
@@ -942,6 +1103,7 @@ int runFrame(int16_t *out, int maxFrames) {
     g->audio.clear();
     retro_run();
     scoreGuardTick();
+    runTick();
 
     int frames = (int)(g->audio.size() / 2);
     float sp = g->speed.load();
@@ -982,12 +1144,23 @@ bool saveState(std::vector<uint8_t> &out) {
     if (!g || !g->loaded) return false;
     if (halted()) return false;            // never keep a game stopped by an exception
     // never store the patched ROM state as part of the gameplay state
-    out.resize(retro_serialize_size());
-    return retro_serialize(out.data(), out.size());
+    size_t n = retro_serialize_size();
+    out.resize(n);
+    if (!retro_serialize(out.data(), n)) return false;
+    // trailer: the clean-run status travels with the game ("Continuar" keeps it)
+    int32_t t[4] = {0x4E555253 /* SRUN */, (g->runClean ? 1 : 0) | (g->runDone ? 2 : 0), g->runScore, g->runLastStory};
+    out.insert(out.end(), (const uint8_t *)t, (const uint8_t *)t + sizeof t);
+    return true;
 }
 
-bool loadState(const std::vector<uint8_t> &in) {
+bool loadState(const std::vector<uint8_t> &inAll, bool resume) {
     if (!g || !g->loaded) return false;
+    std::vector<uint8_t> in = inAll;
+    int32_t run[4] = {0, 0, -1, -1};
+    if (in.size() > 16 && memcmp(&in[in.size() - 16], "SRUN", 4) == 0) {
+        memcpy(run, &in[in.size() - 16], 16);
+        in.resize(in.size() - 16);
+    }
     // States carry a copy of the battery RAM. The high-score table must not travel back in
     // time with a scene state, so the current SRAM is kept across the load.
     std::vector<uint8_t> sram;
@@ -1004,6 +1177,16 @@ bool loadState(const std::vector<uint8_t> &in) {
         ok = false;
     }
     if (ok && sp && sram.size() == sz) memcpy(sp, sram.data(), sz);
+    if (ok) {
+        // "Continuar" is the same game; any other state (scenes, saved games) ends a clean run
+        bool keep = resume && run[0] == 0x4E555253;
+        g->runClean = keep && (run[1] & 1);
+        g->runDone = keep && (run[1] & 2);
+        g->runScore = keep ? run[2] : -1;
+        g->runLastStory = keep ? run[3] : -1;
+        g->runTrack = -2;
+        if (g->runDone) g->runBefore = scoreRecords();
+    }
     g->lastTrack = -2; // force a chapter change notification
     if (g->sonic) { sonicFlushStream(g->sonic); }
     return ok;
@@ -1092,5 +1275,14 @@ bool playerStats(int *score, int *lives) {
     return false;
 }
 size_t romPatchOffsetLoseLife() { return g ? g->loseLifeDec : 0; }
+
+bool takeNewMark(std::string &name, int &score) {
+    if (!g) return false;
+    std::lock_guard<std::mutex> lk(g->runMutex);
+    if (g->newMarkName.empty()) return false;
+    name = g->newMarkName; score = g->newMarkScore;
+    g->newMarkName.clear();
+    return true;
+}
 
 } // namespace srb

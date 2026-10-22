@@ -82,7 +82,8 @@ void setVolumes(float msu, float sfx); // reserved for the mixer (0..2)
 
 // Scene select / states --------------------------------------------------------
 bool saveState(std::vector<uint8_t> &out);
-bool loadState(const std::vector<uint8_t> &in);   // false also for a state of a stopped game
+// false also for a state of a stopped game. resume = "Continuar" (keeps the clean-run status)
+bool loadState(const std::vector<uint8_t> &in, bool resume = false);
 bool halted();                    // the game stopped in its exception handler (black screen)
 void saveSram();
 
@@ -109,4 +110,7 @@ uint16_t effectiveButtons();                        // buttons the game sees (pa
 // bit 0 left, 1 right, 2 brake, 3 accelerate. 0 in movie mode or with the HUD hidden.
 int promptsAt(int track, int audioSample);
 size_t romPatchOffsetLoseLife();
+// A clean run (whole game, no Director's Mode help, no states) just got its record: initials
+// and score (x1000). Once per record.
+bool takeNewMark(std::string &name, int &score);
 } // namespace srb
