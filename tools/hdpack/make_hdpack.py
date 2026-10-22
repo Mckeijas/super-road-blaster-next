@@ -601,12 +601,35 @@ def lever_images(work):
     yline = smooth(np.array([dark_run(g[90:170, x], 90, 100, 3) or 120 for x in range(w)], np.float32))
     ycon = smooth(np.array([dark_run(g[150:230, x], 150, 70, 4) or 230 for x in range(w)], np.float32))
     yy, xx = np.mgrid[0:h, 0:w]
-    a = np.clip((yy - (yline[None, :] + 1)) / 3.0, 0, 1)
+    # the film's own lever, when it is up, rises above that line (on the right) and reaches
+    # x ~40 on the left: the cut-out goes round the raised knob at the highest it is seen in
+    # the film (outline of "up" against "mid", lifted by the extra height of the highest frames)
+    hs_up = np.array([hy_of[f] for f in groups['up']])
+    lift = max(0, info['up'][0] - int(np.percentile(hs_up, 3))) + 10
+    d = (np.abs(meds['up'].astype(np.float32) - meds['mid'].astype(np.float32)).max(2) > 40).astype(np.uint8)
+    d[yy[:, 0] >= 200] = 0
+    d = cv2.morphologyEx(d, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15)))
+    n, lab, st, _ = cv2.connectedComponentsWithStats(d)
+    ktop = np.full(w, 999.0)
+    kleft = w
+    if n > 1:
+        blob = lab == 1 + int(np.argmax(st[1:, 4]))
+        for x in range(w):
+            c = np.nonzero(blob[:, x])[0]
+            if len(c) and c[0] < ycon[x] - 15:          # the knob itself, not a shifted line
+                ktop[x] = c[0] - lift
+                kleft = min(kleft, x)
+    ktop = cv2.erode(ktop.reshape(1, -1).astype(np.float32), np.ones((1, 45), np.uint8)).ravel()
+    top = np.minimum(yline + 1, ktop)
+    a = np.clip((yy - top[None, :]) / 3.0, 0, 1)
+    info['knobTop'] = int(ktop.min()); info['knobLeft'] = int(kleft); info['lift'] = int(lift)
     # left: above the console a soft fade over the light panel, below it the black line left
     # of the red trim
     xl = np.array([dark_run(g[y, 0:40], 0, 70, 3) or 0 for y in range(h)], np.float32)
     left_con = np.clip((xx - xl[:, None] + 1) / 2.0, 0, 1)
-    left_pan = np.clip((xx - 10) / 35.0, 0, 1)
+    # light panel left of the lever: fade in, fully opaque before the raised knob's left end
+    full = max(8, min(45, kleft - 6))
+    left_pan = np.clip(xx / float(full), 0, 1)
     a *= np.where(yy > ycon[None, :] + 4, left_con, left_pan)
     a *= np.clip((w - 1 - xx) / 40.0, 0, 1)                               # right end into the film
     if ref is None:                          # first run: make the reference, then register on it
