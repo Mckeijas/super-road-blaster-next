@@ -39,13 +39,13 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.8.2-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.8.3-release.apk`
    (unos pocos MB: el juego se carga después desde la app).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
 
 ### Versiones y nombre de la APK
-La versión está en `android/gradle.properties` → `srbVersion=1.8.2`. **Súbela antes de cada
+La versión está en `android/gradle.properties` → `srbVersion=1.8.3`. **Súbela antes de cada
 build que vayas a instalar** (1.6.0 → 1.6.1 para arreglos, 1.7.0 para novedades). La APK sale
 con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
 *Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
@@ -67,7 +67,7 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.8.2-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.8.3-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ### Primera vez: cargar el juego
@@ -157,7 +157,9 @@ aciertos y choques. Se instala aparte, ocupa algo más de 1 GB y se puede borrar
   con película nunca aparece el vídeo de SNES (ni su salpicadero ni sus flechas rojas): si la
   película aún está colocándose, la imagen queda en negro ese instante. Tras un choque, además,
   la película queda preparada en el punto donde se reanuda mientras se ve la escena del choque.
-  Los retoques del salpicadero siguen el fotograma que hay en pantalla.
+  Los retoques del salpicadero siguen el fotograma que hay en pantalla. La palanca se recorta
+  por las líneas del propio dibujo y se coloca con su propio seguimiento (el salpicadero de la
+  película no se mueve como una pieza rígida), así que no se notan bordes al girar ni al frenar.
 - Escenas de choque, logos y pantallas propias del juego usan el vídeo original.
 
 **Crear el pack** (en el PC, una sola vez, con tu propia copia de la película HD; hacen falta

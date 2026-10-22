@@ -31,6 +31,8 @@ public final class HdPack {
     private int fps = 60;
     private byte[] on = new byte[0];
     private short[] dx = new short[0], dy = new short[0];
+    // the lever area drifts a few pixels from the dashboard offset: its own fine offset per sample
+    private short[] ldx = new short[0], ldy = new short[0];
     private float unit = 0.25f;
     // dashboard decoration (film pixels: x, y, w, h)
     public final int[] help = new int[4], pause = new int[4], screen = new int[4], lever = new int[4];
@@ -76,9 +78,15 @@ public final class HdPack {
             rect(ind.getJSONArray("rect"), indicators);
             hasIndicators = new File(dir, "ind_clean.png").exists();
         }
-        fillGaps();
         JSONObject lv = j.optJSONObject("lever");
-        if (lv != null) rect(lv.getJSONArray("rect"), lever);
+        if (lv != null) {
+            rect(lv.getJSONArray("rect"), lever);
+            if (lv.has("dx") && lv.has("dy")) {
+                ldx = shorts(Base64.decode(lv.getString("dx"), Base64.DEFAULT), on.length, false);
+                ldy = shorts(Base64.decode(lv.getString("dy"), Base64.DEFAULT), on.length, false);
+            }
+        }
+        fillGaps();
         JSONObject m = j.optJSONObject("snesToFilm");
         if (m != null) {
             sx = (float) m.optDouble("sx", sx);
@@ -102,6 +110,10 @@ public final class HdPack {
                     if (k < dx.length && j < dx.length) {
                         dx[k] = (short) Math.round(dx[i - 1] + (dx[j] - dx[i - 1]) * f);
                         dy[k] = (short) Math.round(dy[i - 1] + (dy[j] - dy[i - 1]) * f);
+                    }
+                    if (k < ldx.length && j < ldx.length) {
+                        ldx[k] = (short) Math.round(ldx[i - 1] + (ldx[j] - ldx[i - 1]) * f);
+                        ldy[k] = (short) Math.round(ldy[i - 1] + (ldy[j] - ldy[i - 1]) * f);
                     }
                 }
             }
@@ -169,6 +181,17 @@ public final class HdPack {
     }
 
     /** Is the iOS dashboard on screen at film time t? off = its offset in film pixels. */
+    /** Like dashboardAt, for the gear lever area (dashboard offset + its own fine offset). */
+    public boolean leverAt(double t, float[] off) {
+        if (!dashboardAt(t, off)) return false;
+        int i = (int) Math.round((t - t0) * fps);
+        if (i < ldx.length) {
+            off[0] += ldx[i] * unit;
+            off[1] += ldy[i] * unit;
+        }
+        return true;
+    }
+
     public boolean dashboardAt(double t, float[] off) {
         int i = (int) Math.round((t - t0) * fps);
         if (i < 0 || i >= on.length || on[i] == 0) return false;

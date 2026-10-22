@@ -29,7 +29,7 @@ final class HdCompositor {
     private final HdPack pack;
     private final HdVideo video;
     private final float[] texM = new float[16];
-    private final float[] off = new float[2];
+    private final float[] off = new float[2], loff = new float[2];
     private int oesTex, progOes, progSprite, progDim;
     private int texHelp, texPause, texScreen, texUp, texMid, texDown;
     private int texIndClean, texIndLeft, texIndRight, texIndBrake, texIndAccel;
@@ -183,7 +183,9 @@ final class HdCompositor {
                 sprite(texScreen, pack.screen, ox, oy, 0, 0, 1, 1, null);
             }
             int lever = (buttons & NativeBridge.BTN_A) != 0 ? texUp : (buttons & NativeBridge.BTN_B) != 0 ? texDown : texMid;
-            sprite(lever, pack.lever, ox, oy, 0, 0, 1, 1, null);
+            float lx = ox, ly = oy;
+            if (pack.leverAt(td, loff)) { lx = loff[0]; ly = loff[1]; }
+            sprite(lever, pack.lever, lx, ly, 0, 0, 1, 1, null);
         } else if (pack.hasIndicators) {
             // no dashboard in this shot: the prompt screen appears on its own while needed
             floatAlpha = Math.max(0f, Math.min(1f, floatAlpha + (prompts != 0 ? 0.25f : -0.12f)));

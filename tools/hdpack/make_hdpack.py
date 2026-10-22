@@ -10,6 +10,7 @@ Requirements: Python 3, numpy, opencv-python, ffmpeg/ffprobe in PATH.
     make_hdpack.py align   <film.mp4> <game_dir> <work>      # chapter -> film time (audio match)
     make_hdpack.py track   <film.mp4> <work> <start_s> <dur_s> # iOS dashboard presence/offset
     make_hdpack.py patches <film.mp4> <work>                  # clean "?" / pause / screen patches
+    make_hdpack.py levertrack <film.mp4> <work> <start_s> <dur_s> # fine offset of the lever area
     make_hdpack.py indicators <film.mp4> <work>               # green screen: clean + prompt icons
     make_hdpack.py pack    <film.mp4> <work> <out.zip>         # hd.mp4 (re-encoded for instant jumps) + data
     make_hdpack.py all     <film.mp4> <game_dir> <work> <out.zip>
@@ -153,13 +154,33 @@ def sub(res, ml):
     return max(-0.5, min(0.5, sx)), max(-0.5, min(0.5, sy))
 
 
+def frame_times(film, work):
+    """Presentation time of every frame of the film (seconds, sorted), cached in the work
+    folder. The trackers number the frames they read with these: the decoder in the app shows
+    exactly these times, and the container's steps are not exactly 1/60 s."""
+    p = os.path.join(work, 'frame_times.json')
+    if os.path.exists(p):
+        d = json.load(open(p))
+        if d.get('film') == os.path.getsize(film):
+            return np.array(d['t'])
+    r = run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=pts:stream=time_base',
+             '-of', 'json', film], stdout=subprocess.PIPE)
+    j = json.loads(r.stdout)
+    num, den = map(int, j['streams'][0]['time_base'].split('/'))
+    t = np.sort(np.array([int(k['pts']) for k in j['packets'] if 'pts' in k], np.float64)) * num / den
+    json.dump({'film': os.path.getsize(film), 't': [round(float(x), 6) for x in t]}, open(p, 'w'))
+    return t
+
+
 def track(film, work, start, dur):
     tpl = template(film, work)
     x0, y0 = TPL[0] // SC, TPL[1] // SC
     th, tw = tpl.shape
     pad = 40
+    ft = frame_times(film, work)
+    k0 = int(np.searchsorted(ft, start - 1e-9))         # first frame read (at or after start)
     cmd = ['ffmpeg', '-v', 'error', '-ss', '%.3f' % start, '-t', '%.3f' % dur, '-i', film,
-           '-vf', 'fps=%d,scale=%d:%d' % (TRACK_FPS, W2, H2), '-pix_fmt', 'gray', '-f', 'rawvideo', '-']
+           '-vf', 'scale=%d:%d' % (W2, H2), '-vsync', 'passthrough', '-pix_fmt', 'gray', '-f', 'rawvideo', '-']
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     rows = []
     idx = 0
@@ -175,7 +196,11 @@ def track(film, work, start, dur):
         sx, sy = sub(res, ml)
         dx = (ml[0] + sx - min(pad, x0)) * SC
         dy = (ml[1] + sy - min(pad, y0)) * SC
-        rows.append((round(start + idx / TRACK_FPS, 4), round(float(mv), 3), round(float(dx), 2), round(float(dy), 2)))
+        # every film frame as it is, with its own time: an fps filter would duplicate / skip
+        # frames here and there, and the dashboard shakes by several pixels between frames
+        if k0 + idx >= len(ft):
+            break
+        rows.append((round(float(ft[k0 + idx]), 5), round(float(mv), 3), round(float(dx), 2), round(float(dy), 2)))
         idx += 1
     proc.wait()
     name = os.path.join(work, 'track_%07.1f.json' % start)
@@ -392,49 +417,205 @@ def lever(film, work, start, dur, fps=6):
     print('lever %.0f s: %d frames, head y: %s' % (start, len(out), np.histogram(ys, bins=[-400, -40, 40, 400])[0]))
 
 
+LEVER_PAD = 60                  # extra rows at the bottom (dashboard shake)
+LEVER_UP_HY = -30               # lever head this high = "up"
+
+
+LEVER_MARKS = ((318, 360, 388, 432), (0, 150, 38, 240))   # BRAKE label, console's top-left corner
+
+
+def mark_offset(img, ref, R=20):
+    """Offset (x, y) of the lever area in img (a crop at the reference position) measured on the
+    fixed details; None when neither is found."""
+    img = cv2.copyMakeBorder(img, R, R, R, R, cv2.BORDER_REPLICATE).astype(np.float32)
+    got = []
+    for a, b, c, d in LEVER_MARKS:
+        res = cv2.matchTemplate(img[b:d + 2 * R, a:c + 2 * R], ref[b:d, a:c].astype(np.float32), cv2.TM_CCOEFF_NORMED)
+        _, mv, _, ml = cv2.minMaxLoc(res)
+        if mv >= 0.7 and 0 < ml[0] < 2 * R and 0 < ml[1] < 2 * R:
+            sx, sy = sub(res, ml)
+            got.append((ml[0] + sx - R, ml[1] + sy - R))
+    return tuple(np.mean(got, 0)) if got else None
+
+
+def lever_track(film, work, start, dur, fps=TRACK_FPS):
+    """Fine position of the lever area. The film's dashboard is not a rigid piece: the lever
+    area drifts up to ~15 px from the offset measured on the digital screen. It is measured on
+    two fixed, sharp details the lever never covers (the BRAKE label and the console's top-left
+    corner), around that offset. Writes levertrack_<start>.json rows (t, ex, ey, score): film
+    pixels to add to the dashboard offset (score = best normalised correlation)."""
+    rows = load_track(work)
+    tt = np.array([r[0] for r in rows])
+    ref = cv2.imread(os.path.join(work, 'lever_ref.png'), cv2.IMREAD_GRAYSCALE)
+    if ref is None:
+        raise SystemExit('run "leverimages" first')
+    x0, y0 = LEVER[0], LEVER[1]
+    R, pad = 20, 100
+    cx, cy = x0 - pad, y0 - pad
+    W2, H2 = 1440 - cx, 1080 - cy
+    tpls = [ref[b:d, a:c].astype(np.float32) for a, b, c, d in LEVER_MARKS]
+    cmd = ['ffmpeg', '-v', 'error', '-ss', '%.3f' % start, '-t', '%.3f' % dur, '-i', film,
+           '-vf', 'crop=%d:%d:%d:%d' % (W2, H2, cx, cy), '-vsync', 'passthrough', '-pix_fmt', 'gray', '-f', 'rawvideo', '-']
+    ft = frame_times(film, work)
+    k0 = int(np.searchsorted(ft, start - 1e-9))
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    out, i = [], 0
+    while True:
+        buf = proc.stdout.read(W2 * H2)
+        if len(buf) < W2 * H2:
+            break
+        if k0 + i >= len(ft):
+            break
+        t = float(ft[k0 + i])                       # every frame with its own time (see track)
+        i += 1
+        k = int(np.clip(np.searchsorted(tt, t - 0.002), 0, len(rows) - 1))   # the same frame
+        _, sc, dx, dy = rows[k]
+        if sc <= DASH_MIN or abs(tt[k] - t) > 0.002:
+            continue
+        f = np.frombuffer(buf, np.uint8).reshape(H2, W2)
+        f = cv2.copyMakeBorder(f, 0, 600, 0, 600, cv2.BORDER_REPLICATE).astype(np.float32)
+        got = []
+        for (a, b, c, d), tpl in zip(LEVER_MARKS, tpls):
+            X = int(round(pad + dx)) + a - R; Y = int(round(pad + dy)) + b - R
+            if X < 0 or Y < 0:
+                continue
+            win = f[Y:Y + (d - b) + 2 * R, X:X + (c - a) + 2 * R]
+            res = cv2.matchTemplate(win, tpl, cv2.TM_CCOEFF_NORMED)
+            _, mv, _, ml = cv2.minMaxLoc(res)
+            if mv < 0.6 or not (0 < ml[0] < 2 * R and 0 < ml[1] < 2 * R):
+                continue
+            sx, sy = sub(res, ml)
+            got.append((X + ml[0] + sx - (pad + dx) - a, Y + ml[1] + sy - (pad + dy) - b, mv))
+        if got:
+            g = np.array(got)
+            out.append((round(t, 5), round(float(g[:, 0].mean()), 2), round(float(g[:, 1].mean()), 2),
+                        round(float(g[:, 2].min()), 3)))
+    proc.wait()
+    json.dump(out, open(os.path.join(work, 'levertrack_%07.1f.json' % start), 'w'))
+    e = np.array([[o[1], o[2]] for o in out]) if out else np.zeros((0, 2))
+    print('levertrack %.0f s: %d frames, |ex| %.1f |ey| %.1f' % (start, len(out), *(np.abs(e).mean(0) if len(e) else (0, 0))))
+
+
+def lever_residual(work):
+    """Fine lever offset (to add to the dashboard offset) as a function of film time, from the
+    levertrack_*.json measurements: unreliable matches are dropped, the rest smoothed; between
+    samples and where there is none, the vertical perspective of the dashboard is used (the
+    lever area moves about 1.26 times as much as the digital screen)."""
+    L = []
+    for f in sorted(os.listdir(work)):
+        if f.startswith('levertrack_') and f.endswith('.json'):
+            L += json.load(open(os.path.join(work, f)))
+    if not L:
+        return None
+    L.sort()
+    t = np.array([r[0] for r in L]); ex = np.array([r[1] for r in L]); ey = np.array([r[2] for r in L])
+    sc = np.array([r[3] for r in L])
+    ok = sc >= 0.7
+    rows = load_track(work)
+    tt = np.array([r[0] for r in rows]); dyt = np.array([r[3] for r in rows])
+    dy = np.interp(t, tt, dyt)
+    k, b = np.polyfit(dy[ok], ey[ok], 1)
+    ex0 = float(np.median(ex[ok]))
+    # median of 3 consecutive frames (reliable ones only), then linear in time
+    def med(v):
+        o = v.copy()
+        for i in range(len(v)):
+            w = [v[j] for j in range(max(0, i - 1), min(len(v), i + 2)) if ok[j] and abs(t[j] - t[i]) < 0.04]
+            o[i] = np.median(w) if w else np.nan
+        return o
+    mx, my = med(ex), med(ey)
+    # each frame's own value (the dashboard shakes from frame to frame); the median of 3 only
+    # replaces values that jump away from their neighbours (a bad match)
+    exs = np.where(ok & (np.abs(ex - mx) <= 3), ex, mx)
+    eys = np.where(ok & (np.abs(ey - my) <= 3), ey, my)
+    good = ~np.isnan(exs) & ~np.isnan(eys)
+    def at(tq, dyq):
+        tq = np.atleast_1d(tq); dyq = np.atleast_1d(dyq)
+        x = np.interp(tq, t[good], exs[good]); y = np.interp(tq, t[good], eys[good])
+        # far from any measurement (> 0.15 s): perspective model
+        j = np.clip(np.searchsorted(t[good], tq), 1, good.sum() - 1)
+        gap = np.minimum(np.abs(t[good][j] - tq), np.abs(t[good][j - 1] - tq))
+        far = gap > 0.5
+        x[far] = ex0; y[far] = k * dyq[far] + b
+        return x, y
+    return at
+
+
 def lever_images(work):
-    """Median image of the lever area for each position."""
+    """Images of the lever area in its three positions, cut out along the drawing's own lines.
+
+    * Frames whose lever head is at the most common height of each position are averaged
+      (median), so the picture is sharp (mixing heights blurs the moving lever).
+    * One cut-out for the three: from the thin dark line that crosses the dashboard above the
+      console (the raised lever never goes higher) down to the bottom, and from the black line
+      beside the red trim of the console to the right. Those borders lie on dark lines of the
+      drawing, so they do not show; the film's own lever is always covered, wherever it is.
+    * Above the console the left end fades over a few dozen pixels of light panel, and the
+      right end fades into the film (fixed console there), so the dashboard's sideways shake
+      never uncovers an edge. The bottom is padded (edge rows repeated) for the vertical shake.
+    """
     keep = os.path.join(work, 'lever_frames')
     files = sorted(os.listdir(keep))
-    groups = {'up': [], 'mid': [], 'down': []}
-    for f in files:
-        hy = int(f.split('_')[1].split('.')[0])
-        groups['up' if hy < -40 else 'down' if hy > 40 else 'mid'].append(f)
-    info, meds = {}, {}
+    hy_of = {f: int(f.split('_')[1].split('.')[0]) for f in files}
+    groups = {'up': [f for f in files if hy_of[f] < LEVER_UP_HY], 'mid': [f for f in files if abs(hy_of[f]) <= 40],
+              'down': [f for f in files if hy_of[f] > 40]}
+    meds, info = {}, {}
+    # reference = the lever area in the middle position, aligned on the dashboard offset only;
+    # every frame is then registered on its fixed details (the area drifts a few pixels)
+    ref_path = os.path.join(work, 'lever_ref.png')
+    ref = cv2.imread(ref_path, cv2.IMREAD_GRAYSCALE)
     for name, fl in groups.items():
         if not fl:
             raise SystemExit('no frames with the lever %s' % name)
-        fl = [fl[int(i)] for i in np.linspace(0, len(fl) - 1, min(len(fl), 41))]
-        med = np.median(np.stack([cv2.imread(os.path.join(keep, f)) for f in fl]), axis=0).astype(np.uint8)
-        meds[name] = med
-        info[name] = len(fl)
-    # only the dashboard part is painted: find its white top trim in the middle image
+        hs = np.array([hy_of[f] for f in fl])
+        vals, cnt = np.unique(hs, return_counts=True)
+        best = max(vals, key=lambda v: (cnt[(vals >= v - 1) & (vals <= v + 1)].sum(), -abs(v)))
+        sel = [f for f in fl if abs(hy_of[f] - best) <= 1]
+        stack = []
+        for f in sel:
+            im = cv2.imread(os.path.join(keep, f))
+            if ref is not None:                  # register on the fixed details, drop if not found
+                e = mark_offset(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY), ref)
+                if e is None:
+                    continue
+                im = cv2.warpAffine(im, np.float32([[1, 0, -e[0]], [0, 1, -e[1]]]), (im.shape[1], im.shape[0]),
+                                    flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+            stack.append(im)
+        if not stack:
+            raise SystemExit('lever %s: no frame matches the reference' % name)
+        meds[name] = np.median(np.stack(stack), axis=0).astype(np.uint8)
+        sel = stack
+        info[name] = (int(best), len(sel))
     g = cv2.cvtColor(meds['mid'], cv2.COLOR_BGR2GRAY).astype(np.float32)
-    band = g[:, 40:340].mean(1)
-    trim = next((y for y in range(10, len(band)) if band[y] > 185), 100)
-    alpha = np.clip((np.arange(g.shape[0]) - (trim - 10)) / 8.0, 0, 1)
-    top = np.repeat(alpha[:, None], g.shape[1], 1)
-    # only where the lever moves (knob and slot in its three positions), with a soft edge: the
-    # rest of the dashboard keeps the film's own pixels, so no straight seam shows where the
-    # light panel's shading changes from shot to shot
-    d = np.zeros(g.shape, np.float32)
-    for a_, b_ in (('up', 'mid'), ('mid', 'down'), ('up', 'down')):
-        d = np.maximum(d, np.abs(meds[a_].astype(np.float32) - meds[b_].astype(np.float32)).max(2))
-    m = ((d > 40) & (top > 0.99)).astype(np.uint8) * 255
-    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)))
-    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
-    n, lab, st, _ = cv2.connectedComponentsWithStats(m)
-    fill = np.zeros_like(m)
-    if n > 1:
-        blob = (lab == 1 + int(np.argmax(st[1:, 4]))).astype(np.uint8)
-        cv2.fillConvexPoly(fill, cv2.convexHull(cv2.findNonZero(blob)), 1)
-    fill = cv2.dilate(fill, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
-    soft = np.clip(cv2.GaussianBlur(fill.astype(np.float32), (0, 0), 10) * 1.2, 0, 1)
-    soft *= np.clip((np.arange(g.shape[1]) - 4) / 30.0, 0, 1)[None, :]    # never a hard left edge
-    a8 = np.round(soft * top * 255).astype(np.uint8)
-    for name, med in meds.items():
-        cv2.imwrite(os.path.join(work, 'lever_%s.png' % name), np.dstack([med, a8]))
-    info['trimRow'] = int(trim)
+    h, w = g.shape
+
+    def dark_run(seq, lo, thr, run):
+        d = np.where(seq < thr)[0]
+        for k in range(len(d) - run + 1):
+            if d[k + run - 1] - d[k] == run - 1:
+                return lo + d[k]
+        return None
+    def smooth(v):
+        return cv2.medianBlur(np.clip(v, 0, 255).astype(np.uint8).reshape(1, -1), 9).astype(np.float32).ravel()
+    # thin line across the dashboard (top of the cut-out) and the console's thick top edge
+    yline = smooth(np.array([dark_run(g[90:170, x], 90, 100, 3) or 120 for x in range(w)], np.float32))
+    ycon = smooth(np.array([dark_run(g[150:230, x], 150, 70, 4) or 230 for x in range(w)], np.float32))
+    yy, xx = np.mgrid[0:h, 0:w]
+    a = np.clip((yy - (yline[None, :] + 1)) / 3.0, 0, 1)
+    # left: above the console a soft fade over the light panel, below it the black line left
+    # of the red trim
+    xl = np.array([dark_run(g[y, 0:40], 0, 70, 3) or 0 for y in range(h)], np.float32)
+    left_con = np.clip((xx - xl[:, None] + 1) / 2.0, 0, 1)
+    left_pan = np.clip((xx - 10) / 35.0, 0, 1)
+    a *= np.where(yy > ycon[None, :] + 4, left_con, left_pan)
+    a *= np.clip((w - 1 - xx) / 40.0, 0, 1)                               # right end into the film
+    if ref is None:                          # first run: make the reference, then register on it
+        cv2.imwrite(ref_path, cv2.cvtColor(meds['mid'], cv2.COLOR_BGR2GRAY))
+        return lever_images(work)
+    for name, img in meds.items():
+        rgba = np.dstack([img, np.round(a * 255).astype(np.uint8)])
+        rgba = cv2.copyMakeBorder(rgba, 0, LEVER_PAD, 0, 0, cv2.BORDER_REPLICATE)
+        cv2.imwrite(os.path.join(work, 'lever_%s.png' % name), rgba)
     print('lever images', info)
 
 
@@ -456,6 +637,15 @@ def pack_meta(film, work):
             on[i] = 1
             dx[i] = int(round(x * 4))
             dy[i] = int(round(y * 4))
+    # fine lever offset per dashboard sample (quarter pixels), added to the dashboard offset
+    fine = lever_residual(work)
+    lx = np.zeros(n, '<i2'); ly = np.zeros(n, '<i2')
+    if fine is not None and n:
+        # evaluated at each frame's own time, stored in that frame's slot (like dx / dy)
+        rt = np.array([r[0] for r in rows]); rdy = np.array([r[3] for r in rows])
+        ex, ey = fine(rt, rdy)
+        idx = np.clip(np.round((rt - t0) * TRACK_FPS).astype(int), 0, n - 1)
+        lx[idx] = np.round(ex * 4); ly[idx] = np.round(ey * 4)
     meta = json.loads(run(['ffprobe', '-v', 'error', '-select_streams', 'v', '-show_entries',
                            'stream=width,height,r_frame_rate', '-of', 'json', film],
                           stdout=subprocess.PIPE).stdout)['streams'][0]
@@ -471,8 +661,10 @@ def pack_meta(film, work):
                       'patches': pt},
         # SNES picture (256x239) -> film pixels: x' = x*sx + ox, y' = (y - 8)*sy + oy
         'snesToFilm': {'sx': 5.6, 'sy': 5.52, 'ox': 4, 'oy': 12},
-        'lever': {'rect': [LEVER[0], LEVER[1], LEVER[2] - LEVER[0], LEVER[3] - LEVER[1]],
-                  'images': {'up': 'lever_up.png', 'mid': 'lever_mid.png', 'down': 'lever_down.png'}},
+        'lever': {'rect': [LEVER[0], LEVER[1], LEVER[2] - LEVER[0], LEVER[3] - LEVER[1] + LEVER_PAD],
+                  'images': {'up': 'lever_up.png', 'mid': 'lever_mid.png', 'down': 'lever_down.png'},
+                  # fine offset of the lever area per dashboard sample (quarter px), added to dx/dy
+                  'dx': base64.b64encode(lx.tobytes()).decode(), 'dy': base64.b64encode(ly.tobytes()).decode()},
         # green screen: clean background + the game's own prompts (format 2)
         'indicators': {'rect': [GREEN[0], GREEN[1], GREEN[2] - GREEN[0], GREEN[3] - GREEN[1]],
                        'clean': 'ind_clean.png',
@@ -533,6 +725,8 @@ def main():
         lever(a[1], a[2], float(a[3]), float(a[4]))
     elif cmd == 'leverimages':
         lever_images(a[1])
+    elif cmd == 'levertrack':
+        lever_track(a[1], a[2], float(a[3]), float(a[4]))
     elif cmd == 'indicators':
         indicators(a[1], a[2])
     elif cmd == 'pack':
@@ -552,6 +746,11 @@ def main():
             lever(film, work, s, 300.0)
             s += 300.0
         lever_images(work)
+        s = 0.0
+        while s < dur:
+            lever_track(film, work, s, 300.0)
+            s += 300.0
+        lever_images(work)                  # again, aligned with the fine lever offsets
         indicators(film, work)
         pack(film, work, out)
     else:
