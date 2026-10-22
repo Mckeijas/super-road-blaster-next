@@ -1087,7 +1087,7 @@
     }
     const scenes = st.phase === 'scenes', hd = st.phase === 'hd';
     $('.ph', o).textContent = hd ? 'Pack HD' : scenes ? 'Paso 2 de 2' : 'Paso 1 de 2';
-    $('h2', o).textContent = hd ? 'Instalando la película HD' : scenes ? 'Preparando escenas y miniaturas' : 'Copiando el juego';
+    $('h2', o).textContent = hd ? 'Instalando Pack HD' : scenes ? 'Preparando escenas y miniaturas' : 'Copiando el juego';
     $('.bar b', o).style.width = (st.percent | 0) + '%';
     $('p', o).textContent = (st.percent | 0) + ' % · ' + (hd ? 'instalando el pack, no cierres la app'
       : scenes ? 'la app recorre la aventura en modo automático, solo esta vez'
