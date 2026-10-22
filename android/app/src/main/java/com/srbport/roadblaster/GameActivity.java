@@ -156,7 +156,22 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
                 File f = GameData.slotFile(this, Integer.parseInt(arg));
                 if (f.exists()) state = GameData.readFile(f);
             }
-            if (state != null && !NativeBridge.nativeLoadState(state)) Log.w(TAG, "state load failed");
+            if (state != null && !NativeBridge.nativeLoadState(state)) {
+                Log.w(TAG, "state load failed");
+                // "Continuar" saved by an older version after the game had stopped: start that
+                // stretch of road again from its beginning instead
+                if ("resume".equals(mode)) {
+                    try {
+                        File ri = GameData.resumeInfoFile(this);
+                        int ch = ri.exists() ? Integer.parseInt(new String(GameData.readFile(ri)).trim()) : -1;
+                        File sf = ch >= 0 ? GameData.sceneStateFile(this, ch) : null;
+                        if (sf != null && sf.exists() && NativeBridge.nativeLoadState(GameData.readFile(sf)))
+                            runOnUiThread(() -> Toast.makeText(this, "La partida guardada estaba dañada: continúas desde el inicio de ese tramo", Toast.LENGTH_LONG).show());
+                    } catch (Exception ex) {
+                        Log.w(TAG, "resume fallback", ex);
+                    }
+                }
+            }
             started = true;
             emu.start();
             if (isFinishing()) runOnUiThread(this::stopSession);

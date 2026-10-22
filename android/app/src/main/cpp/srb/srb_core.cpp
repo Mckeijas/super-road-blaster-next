@@ -394,6 +394,8 @@ struct State {
 
     // Infinite-lives ROM patch
     size_t loseLifeDec = 0;        // offset of "DEC dp" inside the ROM, 0 = not found
+    size_t excErr = 0;             // WRAM address of the game's exception number, 0 = unknown
+    size_t excStop = 0;            // ROM offset of the STP that ends the exception handler
     uint8_t loseLifeOrig[2] = {0, 0};
     bool patched = false;
 
@@ -642,6 +644,26 @@ void parseChapters(const std::string &txt) {
     }
 }
 
+// The game's exception handler (core.error.trigger) stores the error number in WRAM
+// ("and #$ff / sta.l excErr / lda 6,s / sta.l excArgs"), clears the screen and ends with STP
+// ("lda #$0f / sta $2100 / stp"): the console is stopped for good. Finds both.
+void findExceptionHandler() {
+    const uint8_t *rom = Memory.ROM;
+    size_t n = Memory.CalculatedSize;
+    for (size_t i = 0; i + 11 <= n; ++i) {
+        if (rom[i] == 0x29 && rom[i + 1] == 0xFF && rom[i + 2] == 0x00 && rom[i + 3] == 0x8F &&
+            rom[i + 6] == 0x7E && rom[i + 7] == 0xA3 && rom[i + 8] == 0x06 && rom[i + 9] == 0x8F) {
+            g->excErr = (size_t)(rom[i + 4] | (rom[i + 5] << 8));
+            for (size_t j = i; j + 4 <= n && j < i + 0x300; ++j)
+                if (rom[j] == 0x8D && rom[j + 1] == 0x00 && rom[j + 2] == 0x21 && rom[j + 3] == 0xDB) {
+                    g->excStop = j + 3;
+                    break;
+                }
+            return;
+        }
+    }
+}
+
 // Player.loseLife:  sep #$20 / lda dp / bne + / sec / rts / + dec dp / clc / rts
 size_t findLoseLife() {
     const uint8_t *rom = Memory.ROM;
@@ -732,6 +754,29 @@ void directorTick() {
 } // namespace
 
 // ===========================================================================
+// Fixes for bugs of the released game, applied to the ROM image in memory (the player's file
+// is never changed) and only when every byte involved is exactly as in that release.
+//
+// Out of sprite palettes: each sprite allocates its own palette in CGRAM and the game stops
+// with an exception (E_OutOfCgram, black screen) when none is left. It happens for real after
+// a crash: the lives counter (2 sprites) is still on screen when the checkpoint restarts and a
+// double prompt (e.g. brake + right in level 3, checkpoint 1) creates its icons, the points and
+// the bonus burst all at once. Instead, such a sprite now borrows the first sprite palette
+// without owning it (id 0 = never freed): at worst it shows odd colours for a moment.
+//   jsr core.cgram.allocate / bcs + / pei (palette.length) / pea E_OutOfCgram / jsr error.trigger
+//   -> jsr core.cgram.allocate / bcs + / ldx #PALETTE.START.SPRITE / lda #0 / nop / nop
+void romBugFixes(std::vector<uint8_t> &rom) {
+    if (rom.size() != 0x40000) return;
+    static const size_t kSites[] = {0x924A, 0x9568};       // the two sprite allocation paths
+    static const uint8_t kOld[] = {0x20, 0xF4, 0xA5, 0xB0, 0x08, 0xD4, 0x54, 0xF4, 0x34, 0x00,
+                                   0x20, 0x16, 0xAF, 0x86, 0x52, 0xE2, 0x20, 0x85, 0x51};
+    static const uint8_t kNew[] = {0xA2, 0x00, 0x01, 0xA9, 0x00, 0x00, 0xEA, 0xEA};
+    for (size_t at : kSites)
+        if (memcmp(&rom[at], kOld, sizeof kOld) != 0) return;
+    for (size_t at : kSites) memcpy(&rom[at + 5], kNew, sizeof kNew);
+}
+
+// ===========================================================================
 // Small fixes applied to the ROM image in memory (the player's file is never changed), only
 // when every byte involved is exactly as in the released ROM.
 void romFixups(std::vector<uint8_t> &rom) {
@@ -772,6 +817,7 @@ bool init(const Config &cfg) {
     retro_init();
 
     std::vector<uint8_t> rom = cfg.rom;
+    romBugFixes(rom);
     romFixups(rom);
     retro_game_info info{};
     info.path = cfg.romPath.empty() ? "/SuperRoadBlaster.sfc" : cfg.romPath.c_str();
@@ -793,6 +839,7 @@ bool init(const Config &cfg) {
         if (FILE *f = fopen(g->sramPath.c_str(), "rb")) { fread(sram, 1, sz, f); fclose(f); }
     }
 
+    findExceptionHandler();
     g->loseLifeDec = findLoseLife();
     if (g->loseLifeDec) memcpy(g->loseLifeOrig, Memory.ROM + g->loseLifeDec, 2);
     logf("[srb] loaded: fps=%.3f chapters=%zu loseLife@%zx\n", g->fps, g->chapters.size(), g->loseLifeDec);
@@ -924,8 +971,16 @@ void setVolumes(float msu, float sfx) {
     S9xSRBSfxGain = std::max(0.0f, std::min(2.0f, sfx));
 }
 
+bool halted() {
+    if (!g || !g->loaded || !g->excStop) return false;
+    // HiROM: banks $C0-$FF (and $00-$3F upper half) map ROM offset (bank & $3F) << 16 | address
+    size_t at = ((size_t)(Registers.PB & 0x3F) << 16) | Registers.PCw;
+    return at == g->excStop;
+}
+
 bool saveState(std::vector<uint8_t> &out) {
     if (!g || !g->loaded) return false;
+    if (halted()) return false;            // never keep a game stopped by an exception
     // never store the patched ROM state as part of the gameplay state
     out.resize(retro_serialize_size());
     return retro_serialize(out.data(), out.size());
@@ -939,7 +994,15 @@ bool loadState(const std::vector<uint8_t> &in) {
     uint8_t *sp = (uint8_t *)retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
     size_t sz = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
     if (sp && sz) sram.assign(sp, sp + sz);
+    std::vector<uint8_t> before(retro_serialize_size());
+    bool hadBefore = retro_serialize(before.data(), before.size());
     bool ok = retro_unserialize(in.data(), in.size());
+    if (ok && halted()) {
+        // a state saved after the game had stopped (older versions): refuse it
+        logf("[srb] state with a stopped game (exception %d): not loaded\n", g->excErr < 0x2000 ? Memory.RAM[g->excErr] : -1);
+        if (hadBefore) retro_unserialize(before.data(), before.size());
+        ok = false;
+    }
     if (ok && sp && sram.size() == sz) memcpy(sp, sram.data(), sz);
     g->lastTrack = -2; // force a chapter change notification
     if (g->sonic) { sonicFlushStream(g->sonic); }

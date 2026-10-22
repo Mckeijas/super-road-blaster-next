@@ -39,13 +39,13 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.9-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.7.10-release.apk`
    (unos pocos MB: el juego se carga después desde la app).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
 
 ### Versiones y nombre de la APK
-La versión está en `android/gradle.properties` → `srbVersion=1.7.9`. **Súbela antes de cada
+La versión está en `android/gradle.properties` → `srbVersion=1.7.10`. **Súbela antes de cada
 build que vayas a instalar** (1.6.0 → 1.6.1 para arreglos, 1.7.0 para novedades). La APK sale
 con nombre `SuperRoadBlasterNext-v<versión>-release.apk`, y Android muestra esa versión en
 *Ajustes ▸ Apps ▸ Super Road Blaster Next*. El número interno (versionCode) se calcula solo
@@ -67,7 +67,7 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.9-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.7.10-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ### Primera vez: cargar el juego
@@ -199,6 +199,13 @@ frenar); **START** abajo y **❚❚** (menú de pausa) arriba a la derecha. La t
 En la pantalla de título y en la de récords, Start funciona como en el juego original.
 En *Controles* puedes cambiar a «Por etiqueta» si prefieres que el botón con la letra A sea
 la A de SNES. La partida se guarda sola al salir o al pausar el dispositivo.
+
+**Fallo del juego original corregido**: tras un choque, si al reanudar llegaba enseguida una
+maniobra doble (por ejemplo frenar y girar a la derecha ante el camión de la fase 3), el juego
+se quedaba sin paletas de color para los iconos y se detenía con la pantalla en negro. La app lo
+corrige en memoria (tu archivo del juego no se toca). Además nunca guarda una partida con el
+juego detenido, y si una partida antigua quedó así, *Continuar* empieza desde el inicio de ese
+tramo.
 
 ## 5. Si algo falla
 

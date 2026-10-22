@@ -82,7 +82,8 @@ void setVolumes(float msu, float sfx); // reserved for the mixer (0..2)
 
 // Scene select / states --------------------------------------------------------
 bool saveState(std::vector<uint8_t> &out);
-bool loadState(const std::vector<uint8_t> &in);
+bool loadState(const std::vector<uint8_t> &in);   // false also for a state of a stopped game
+bool halted();                    // the game stopped in its exception handler (black screen)
 void saveSram();
 
 // Introspection -----------------------------------------------------------------
