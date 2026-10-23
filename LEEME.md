@@ -39,7 +39,7 @@ Necesitas **Android Studio** y unos 10 GB libres.
      marca **NDK (Side by side)** y **CMake**, Apply y repite el sync.
 3. **Build ▸ Select Build Variant…** → **release**.
 4. **Build ▸ Build App Bundle(s) / APK(s) ▸ Build APK(s)**.
-5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.8.4-release.apk`
+5. La APK queda en `android\app\build\outputs\apk\release\SuperRoadBlasterNext-v1.8.5-release.apk`
    (unos pocos MB: el juego se carga después desde la app).
 
 Desde terminal, en la carpeta `android`: `gradlew.bat assembleRelease`
@@ -67,7 +67,7 @@ actualizaciones y habría que desinstalar la app, lo que borra sus datos.
 ## 2. Instalar
 
 - Copia `SuperRoadBlasterNext-v….apk` al dispositivo, ábrela con el gestor de archivos y permite
-  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.8.4-release.apk`.
+  «instalar apps desconocidas», o bien `adb install -r SuperRoadBlasterNext-v1.8.5-release.apk`.
 - Aparece como **Super Road Blaster Next**, con el icono SRBN.
 
 ### Primera vez: cargar el juego
@@ -151,6 +151,9 @@ aciertos y choques. Se instala aparte, ocupa algo más de 1 GB y se puede borrar
   flechas rojas de SNES. Los avisos que traía grabados la película (seguían otra versión) quedan
   tapados también en los planos en los que el salpicadero se desplaza. En los planos sin
   salpicadero, la pantalla verde aparece sola mientras haya un aviso.
+- En el último tramo, con el **otro coche** (salpicadero de tres pilotos redondos), los avisos se
+  encienden en sus pilotos (flecha izquierda, turbo o freno ✕ en el central, flecha derecha) y la
+  palanca lleva el embellecedor blanco de ese coche.
 - La película del pack se recodifica para que cualquier salto del juego (reanudar tras un
   choque, selector de escenas, cargar partida, cambio de clip) muestre el fotograma correcto al
   momento: un fotograma clave cada medio segundo y en cada inicio de capítulo. En los capítulos
@@ -160,7 +163,8 @@ aciertos y choques. Se instala aparte, ocupa algo más de 1 GB y se puede borrar
   Los retoques del salpicadero siguen el fotograma que hay en pantalla. La palanca se recorta
   por las líneas del propio dibujo y se coloca con su propio seguimiento (el salpicadero de la
   película no se mueve como una pieza rígida), así que no se notan bordes al girar ni al frenar.
-- Escenas de choque, logos y pantallas propias del juego usan el vídeo original.
+- Escenas de choque, logos y pantallas propias del juego usan el vídeo original. Los puntos que salen
+  volando al acertar un aviso no siguen en pantalla cuando empieza un choque.
 
 **Crear el pack** (en el PC, una sola vez, con tu propia copia de la película HD; hacen falta
 Python 3 con numpy y opencv-python, y ffmpeg con libx264; recodificar la película lleva unos

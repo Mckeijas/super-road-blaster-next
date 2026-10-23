@@ -12,6 +12,7 @@ Requirements: Python 3, numpy, opencv-python, ffmpeg/ffprobe in PATH.
     make_hdpack.py patches <film.mp4> <work>                  # clean "?" / pause / screen patches
     make_hdpack.py levertrack <film.mp4> <work> <start_s> <dur_s> # fine offset of the lever area
     make_hdpack.py indicators <film.mp4> <work>               # green screen: clean + prompt icons
+    make_hdpack.py lamps   <film.mp4> <work>                  # same for the 2nd car's three lamps
     make_hdpack.py pack    <film.mp4> <work> <out.zip>         # hd.mp4 (re-encoded for instant jumps) + data
     make_hdpack.py all     <film.mp4> <game_dir> <work> <out.zip>
 
@@ -45,6 +46,12 @@ LEVER = (1050, 640, 1440, 1080) # gear lever area: covered by the app's own leve
 HEAD = (1120, 830, 1410, 940)   # lever head in its middle position (search template)
 GREEN = (512, 710, 982, 838)    # green indicator screen (arrows / brake / turbo) + margin
 VIDEO_FPS = 23.9777             # frame rate of the game's event tables (chapters.txt)
+# Last stretch of the story (level 9, after the red car is lost): another car, whose dashboard has
+# three round lamps (left arrow / turbo / right arrow) instead of the green screen
+CAR2_CHAPTER = 'level9_checkpoint5'
+LAMPS = (540, 690, 960, 816)    # the three lamps (x0, y0, x1, y1); even sizes (yuv420 crop)
+LAMP_C = ((618.5, 752.5), (755.0, 751.5), (890.5, 751.5))   # left, middle, right lamp centres
+LAMP_R = 50                     # radius of the glass inside the chrome ring
 ICON_REGION = {'left': (0.0, 0.40), 'right': (0.60, 1.0), 'brake': (0.30, 0.70), 'accel': (0.30, 0.70)}
 EVENT_ICON = {'direction-left': 'left', 'direction-right': 'right', 'brake': 'brake', 'accelerate': 'accel'}
 
@@ -372,6 +379,159 @@ def indicators(film, work, per_type=12):
     print('indicators', info)
 
 
+# ------------------------------------------------------------------------------- lamps (2nd car)
+def lamps(film, work):
+    """The car of the last stretch has three lamps instead of the green screen; the iOS release
+    lights them with its own timing. Builds the lamps off (painted over the film's) and one image
+    per prompt (left / right arrow, turbo from the film; brake = the game's red X in the middle
+    lamp, which the film never lights)."""
+    al = json.load(open(os.path.join(work, 'align.json')))
+    ch = [v for v in al.values() if v.get('name') == CAR2_CHAPTER and v['ok']]
+    if not ch:
+        print('lamps: chapter %s not in the film' % CAR2_CHAPTER)
+        return
+    t0, t1 = ch[0]['start'], ch[0]['start'] + ch[0]['dur']
+    ft = frame_times(film, work)
+    rows = load_track(work)
+    rt = np.array([r[0] for r in rows])
+    x0, y0, x1, y1 = LAMPS
+    w, h = x1 - x0, y1 - y0
+    mg = 40
+    W, H = w + 2 * mg, h + 2 * mg
+    yy, xx = np.mgrid[0:h, 0:w]
+    discs = [((xx - (cx - x0)) ** 2 + (yy - (cy - y0)) ** 2 <= (LAMP_R - 0.5) ** 2) for cx, cy in LAMP_C]
+    k0 = int(np.searchsorted(ft, t0))
+    seek = max(0.0, ft[k0] - 0.3)
+    i = int(np.searchsorted(ft, seek - 1e-9))
+    # every frame with its own time (see frame_times)
+    p = subprocess.Popen(['ffmpeg', '-v', 'error', '-ss', '%.6f' % seek, '-i', film, '-t', '%.3f' % (t1 - seek + 0.2),
+                          '-vsync', 'passthrough', '-vf', 'crop=%d:%d:%d:%d' % (W, H, x0 - mg, y0 - mg),
+                          '-pix_fmt', 'bgr24', '-f', 'rawvideo', '-'], stdout=subprocess.PIPE)
+    quiet, cand = [], {'left': [], 'right': [], 'accel': []}
+    n = 0
+    while True:
+        b = p.stdout.read(W * H * 3)
+        if len(b) < W * H * 3:
+            break
+        t = ft[i] if i < len(ft) else 1e9
+        i += 1
+        if t < t0 or t > t1:
+            continue
+        k = int(np.clip(np.searchsorted(rt, t), 1, len(rows) - 1))
+        k = k - 1 if abs(rt[k - 1] - t) < abs(rt[k] - t) else k
+        if abs(rt[k] - t) > 0.01 or rows[k][1] <= DASH_MIN:
+            continue
+        f = np.frombuffer(b, np.uint8).reshape(H, W, 3)
+        M = np.float32([[1, 0, -rows[k][2] - mg], [0, 1, -rows[k][3] - mg]])
+        c = cv2.warpAffine(f, M, (w, h), flags=cv2.INTER_LINEAR)
+        lm = [c[d].reshape(-1, 3).mean(0) for d in discs]          # B, G, R per lamp
+        n += 1
+        if os.environ.get('LAMPDBG'):
+            print('%.3f' % t, ' '.join('%d,%d,%d' % tuple(v) for v in lm))
+        if lm[0][1] < 62 and lm[2][1] < 62 and lm[1][0] < 50 and lm[1][1] < 50:
+            if n % 3 == 0:
+                quiet.append(c)
+            continue
+        for name, v in (('left', lm[0][1]), ('right', lm[2][1]), ('accel', lm[1][0])):
+            if v > (85 if name != 'accel' else 80):
+                cand[name].append((float(v), c))
+                cand[name] = sorted(cand[name], key=lambda e: -e[0])[:12]
+    p.wait()
+    print('lamps: %d dashboard frames, %d quiet, lit %s' % (n, len(quiet), {k: len(v) for k, v in cand.items()}))
+    if len(quiet) < 5:
+        return
+    clean = np.median(np.stack(quiet), axis=0).astype(np.uint8)
+    def disc_alpha(ds):
+        a = np.zeros((h, w), np.float32)
+        for d in ds:
+            a[d] = 1
+        return cv2.GaussianBlur(a, (0, 0), 1.0)
+    allm = disc_alpha(discs)
+    cv2.imwrite(os.path.join(work, 'lamp_clean.png'), np.dstack([clean, (allm * 255).astype(np.uint8)]))
+    ring = (allm < 0.01)
+    which = {'left': 0, 'accel': 1, 'right': 2}
+    for name, lst in cand.items():
+        if not lst:
+            continue
+        top = lst[0][0]
+        # among the brightest, the one that sits best on the clean dashboard (good offset)
+        best = min((e for e in lst if e[0] >= 0.9 * top),
+                   key=lambda e: np.abs(e[1].astype(np.int32) - clean).max(2)[ring].mean())[1]
+        a = disc_alpha([discs[which[name]]])
+        cv2.imwrite(os.path.join(work, 'lamp_%s.png' % name), np.dstack([best, (a * 255).astype(np.uint8)]))
+    # brake: the game's red X (from the green screen) lit inside the red middle lamp
+    xb = cv2.imread(os.path.join(work, 'ind_brake.png'), cv2.IMREAD_UNCHANGED)
+    if xb is not None:
+        ax = xb[..., 3]
+        bx, by, bw, bh = cv2.boundingRect((ax > 20).astype(np.uint8))
+        icon = xb[by:by + bh, bx:bx + bw]
+        sc = (LAMP_R * 1.25) / max(bw, bh)
+        icon = cv2.resize(icon, None, fx=sc, fy=sc, interpolation=cv2.INTER_AREA)
+        ih, iw = icon.shape[:2]
+        cx, cy = LAMP_C[1][0] - x0, LAMP_C[1][1] - y0
+        ox, oy = int(round(cx - iw / 2.0)), int(round(cy - ih / 2.0))
+        ia = np.zeros((h, w), np.float32)
+        ic = np.zeros((h, w, 3), np.float32)
+        ia[oy:oy + ih, ox:ox + iw] = icon[..., 3] / 255.0
+        ic[oy:oy + ih, ox:ox + iw] = icon[..., :3]
+        lamp = clean.astype(np.float32)
+        glow = cv2.GaussianBlur(ia, (0, 0), 7) * discs[1]
+        lamp[..., 2] = np.clip(lamp[..., 2] + glow * 190, 0, 255)       # red glow of the glass
+        lamp[..., 1] += glow * 10
+        lamp = lamp * (1 - ia[..., None]) + ic * ia[..., None]
+        a = disc_alpha([discs[1]])
+        cv2.imwrite(os.path.join(work, 'lamp_brake.png'), np.dstack([np.clip(lamp, 0, 255).astype(np.uint8), (a * 255).astype(np.uint8)]))
+    car2_lever(work, t0, t1)
+    json.dump({'from': [[t0, t1]]}, open(os.path.join(work, 'lamps.json'), 'w'))
+    print('lamps', t0, t1)
+
+
+def car2_lever(work, t0, t1):
+    """The lever console of the second car is the same drawing with a white trim instead of the
+    red one. Its lever is seen almost only in the middle position: the middle image is that car's
+    own (median of its frames, registered like the first car's); up and down are the first car's
+    lever on the second car's console."""
+    keep = os.path.join(work, 'lever_frames')
+    ref = cv2.imread(os.path.join(work, 'lever_ref.png'), cv2.IMREAD_GRAYSCALE)
+    stack = []
+    for f in sorted(os.listdir(keep)):
+        t, hy = float(f.split('_')[0]), int(f.split('_')[1].split('.')[0])
+        if not (t0 <= t <= t1) or abs(hy) > 20:
+            continue
+        im = cv2.imread(os.path.join(keep, f))
+        e = mark_offset(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY), ref) if ref is not None else (0, 0)
+        if e is None:
+            continue
+        stack.append(cv2.warpAffine(im, np.float32([[1, 0, -e[0]], [0, 1, -e[1]]]), (im.shape[1], im.shape[0]),
+                                    flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE))
+    if len(stack) < 5:
+        print('car2 lever: only %d frames, the first car\'s lever is used' % len(stack))
+        return
+    med = np.median(np.stack(stack), axis=0).astype(np.uint8)
+    med = cv2.copyMakeBorder(med, 0, LEVER_PAD, 0, 0, cv2.BORDER_REPLICATE)
+    one = {k: cv2.imread(os.path.join(work, 'lever_%s.png' % k), cv2.IMREAD_UNCHANGED) for k in ('up', 'mid', 'down')}
+    mid1 = one['mid'][..., :3].astype(np.float32)
+    m2 = med.astype(np.float32)
+    for name, im in one.items():
+        c1 = im[..., :3].astype(np.float32)
+        if name == 'mid':
+            out = m2.copy()
+        else:
+            # where this position differs from the middle one: the moving lever (and the place it left)
+            d = (np.abs(c1 - mid1).max(2) > 25).astype(np.uint8)
+            d = cv2.morphologyEx(d, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+            mv = cv2.GaussianBlur(cv2.dilate(d, np.ones((9, 9), np.uint8)).astype(np.float32), (0, 0), 2.5)[..., None]
+            out = c1 * mv + m2 * (1 - mv)
+        # red trim of the first car -> the second car's
+        b, g, r = out[..., 0], out[..., 1], out[..., 2]
+        red = ((r - np.maximum(g, b)) > 40).astype(np.uint8)
+        red = cv2.GaussianBlur(cv2.dilate(red, np.ones((5, 5), np.uint8)).astype(np.float32), (0, 0), 1.0)[..., None]
+        out = out * (1 - red) + m2 * red
+        cv2.imwrite(os.path.join(work, 'lever2_%s.png' % name),
+                    np.dstack([np.clip(out, 0, 255).astype(np.uint8), im[..., 3]]))
+    print('car2 lever: %d frames' % len(stack))
+
+
 # ------------------------------------------------------------------------------- lever
 def lever(film, work, start, dur, fps=6):
     """Measures the lever head height in dashboard frames (aligned with the tracked offset)."""
@@ -695,6 +855,19 @@ def pack_meta(film, work):
     }
     images = ('patch_help.png', 'patch_pause.png', 'patch_screen.png', 'lever_up.png', 'lever_mid.png',
               'lever_down.png', 'ind_clean.png', 'ind_left.png', 'ind_right.png', 'ind_brake.png', 'ind_accel.png')
+    lj = os.path.join(work, 'lamps.json')
+    names = ['lamp_%s.png' % k for k in ('clean', 'left', 'right', 'brake', 'accel')]
+    levs = ['lever2_%s.png' % k for k in ('up', 'mid', 'down')]
+    if os.path.exists(lj) and all(os.path.exists(os.path.join(work, f)) for f in names):
+        # second car (last stretch): three lamps instead of the green screen, white lever trim
+        c2 = {'from': json.load(open(lj))['from'],
+              'lamps': {'rect': [LAMPS[0], LAMPS[1], LAMPS[2] - LAMPS[0], LAMPS[3] - LAMPS[1]], 'clean': names[0],
+                        'icons': {k: 'lamp_%s.png' % k for k in ('left', 'right', 'brake', 'accel')}}}
+        images += tuple(names)
+        if all(os.path.exists(os.path.join(work, f)) for f in levs):
+            c2['lever'] = {k: 'lever2_%s.png' % k for k in ('up', 'mid', 'down')}
+            images += tuple(levs)
+        pack_json['car2'] = c2
     return pack_json, images
 
 
@@ -752,6 +925,8 @@ def main():
         lever_track(a[1], a[2], float(a[3]), float(a[4]))
     elif cmd == 'indicators':
         indicators(a[1], a[2])
+    elif cmd == 'lamps':
+        lamps(a[1], a[2])
     elif cmd == 'pack':
         pack(a[1], a[2], a[3])
     elif cmd == 'all':
@@ -775,6 +950,7 @@ def main():
             s += 300.0
         lever_images(work)                  # again, aligned with the fine lever offsets
         indicators(film, work)
+        lamps(film, work)
         pack(film, work, out)
     else:
         print(__doc__)

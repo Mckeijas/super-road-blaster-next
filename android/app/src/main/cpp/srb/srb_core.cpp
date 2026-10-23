@@ -901,6 +901,28 @@ bool isCrashChapter(int track) {
            g->chapters[(size_t)track].name.find("crash") != std::string::npos;
 }
 
+// The "1000" bonus sprite (Sprite.score) flies for about a second after a prompt is done. When
+// the car crashes right after, it used to fly over the crash scene, showing points that the
+// crash takes back (and, with the HD film, the only SNES sprite left on screen). During crash
+// scenes it is ended: its age goes to 1 and the game kills it on its next frame, freeing its
+// sprite memory the normal way. Not in its first frames (the game is still setting it up).
+constexpr int kOidSpriteScore = 64;
+constexpr int kSpriteScoreAge = 98 + 8;     // iterator 28 + dimension 13 + animation 57 + vars.age
+constexpr int kSpriteScoreMaxAge = 60;
+
+void dropBonusSprites() {
+    if (g->oopAlign < 0) return;
+    uint8_t *w = Memory.RAM;
+    for (int o = 0x6000 + g->oopAlign; o + 16 <= 0x7000; o += 16) {
+        // flags 0x84 (not a singleton: bit 0 clear), so not oopRecord()
+        if (w[o + 1] != kOidSpriteScore || !(w[o] & 0x80)) continue;
+        int dp = w[o + 8] | (w[o + 9] << 8), play = w[o + 12] | (w[o + 13] << 8);
+        if (dp < 0x100 || dp + kSpriteScoreAge + 1 >= 0x2000 || play < 0x8000) continue;
+        int age = w[dp + kSpriteScoreAge] | (w[dp + kSpriteScoreAge + 1] << 8);
+        if (age > 1 && age <= kSpriteScoreMaxAge - 4) { w[dp + kSpriteScoreAge] = 1; w[dp + kSpriteScoreAge + 1] = 0; }
+    }
+}
+
 // Some manoeuvres ask for two things at once (e.g. brake + left) and each part scores the moment
 // it is done, so the game used to keep those points even when the other part failed and the car
 // crashed. When a crash scene starts, the score goes back to what it was before the group of
@@ -943,6 +965,7 @@ void scoreGuardTick() {
         g->sgLastVf = -1;
     }
     g->sgTrack = track;
+    if (isCrashChapter(track)) dropBonusSprites();
     if (track >= 0 && track == g->sgStory) {
         int vf = videoFrameNow();
         if (vf != g->sgLastVf) { g->sgHist.emplace_back(vf, score); g->sgLastVf = vf; }

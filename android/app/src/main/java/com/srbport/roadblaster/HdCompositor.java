@@ -33,6 +33,7 @@ final class HdCompositor {
     private int oesTex, progOes, progSprite, progDim;
     private int texHelp, texPause, texScreen, texUp, texMid, texDown;
     private int texIndClean, texIndLeft, texIndRight, texIndBrake, texIndAccel;
+    private int texLampClean, texLampLeft, texLampRight, texLampBrake, texLampAccel, texUp2, texMid2, texDown2;
     private float floatAlpha;   // prompt screen shown on its own when the dashboard is not on screen
     private int lcdScore = Integer.MIN_VALUE, lcdLives = Integer.MIN_VALUE;
     private Bitmap screenBg;
@@ -90,6 +91,18 @@ final class HdCompositor {
             texIndRight = upload(pack.bitmap("ind_right.png"));
             texIndBrake = upload(pack.bitmap("ind_brake.png"));
             texIndAccel = upload(pack.bitmap("ind_accel.png"));
+        }
+        if (pack.hasLamps) {
+            texLampClean = upload(pack.bitmap("lamp_clean.png"));
+            texLampLeft = upload(pack.bitmap("lamp_left.png"));
+            texLampRight = upload(pack.bitmap("lamp_right.png"));
+            texLampBrake = upload(pack.bitmap("lamp_brake.png"));
+            texLampAccel = upload(pack.bitmap("lamp_accel.png"));
+        }
+        if (pack.hasLever2) {
+            texUp2 = upload(pack.bitmap("lever2_up.png"));
+            texMid2 = upload(pack.bitmap("lever2_mid.png"));
+            texDown2 = upload(pack.bitmap("lever2_down.png"));
         }
         ok = progOes != 0 && progSprite != 0;
     }
@@ -173,16 +186,23 @@ final class HdCompositor {
             floatAlpha = 0f;
             sprite(texHelp, pack.help, ox, oy, 0, 0, 1, 1, null);
             sprite(texPause, pack.pause, ox, oy, 0, 0, 1, 1, null);
-            if (pack.hasIndicators) {
+            boolean car2 = pack.car2At(td);
+            if (car2 && pack.hasLamps) {
+                // second car: its three lamps (off) with the game's own prompts lit
+                sprite(texLampClean, pack.lamps, ox, oy, 0, 0, 1, 1, null);
+                drawPrompts(prompts, ox, oy, 1f, true);
+            } else if (pack.hasIndicators && !car2) {
                 sprite(texIndClean, pack.indicators, ox, oy, 0, 0, 1, 1, null);
-                drawPrompts(prompts, ox, oy, 1f);
+                drawPrompts(prompts, ox, oy, 1f, false);
             }
             updateStats();
             if (score >= 0) {
                 refreshScreen();
                 sprite(texScreen, pack.screen, ox, oy, 0, 0, 1, 1, null);
             }
-            int lever = (buttons & NativeBridge.BTN_A) != 0 ? texUp : (buttons & NativeBridge.BTN_B) != 0 ? texDown : texMid;
+            boolean l2 = car2 && pack.hasLever2;
+            int lever = (buttons & NativeBridge.BTN_A) != 0 ? (l2 ? texUp2 : texUp)
+                    : (buttons & NativeBridge.BTN_B) != 0 ? (l2 ? texDown2 : texDown) : (l2 ? texMid2 : texMid);
             float lx = ox, ly = oy;
             if (pack.leverAt(td, loff)) { lx = loff[0]; ly = loff[1]; }
             sprite(lever, pack.lever, lx, ly, 0, 0, 1, 1, null);
@@ -191,7 +211,7 @@ final class HdCompositor {
             floatAlpha = Math.max(0f, Math.min(1f, floatAlpha + (prompts != 0 ? 0.25f : -0.12f)));
             if (floatAlpha > 0.01f) {
                 sprite(texIndClean, pack.indicators, 0, 0, 0, 0, 1, 1, null, floatAlpha * 0.92f);
-                drawPrompts(prompts, 0, 0, floatAlpha);
+                drawPrompts(prompts, 0, 0, floatAlpha, false);
             }
         } else if (snesTex != 0 && snesH > 0) {
             // 3. SNES HUD on its own, mapped onto the film (rows 8..198 = the video area)
@@ -209,15 +229,16 @@ final class HdCompositor {
         GLES30.glDisable(GLES30.GL_BLEND);
     }
 
-    private void drawPrompts(int prompts, float ox, float oy, float a) {
+    private void drawPrompts(int prompts, float ox, float oy, float a, boolean lamps) {
         if (prompts == 0) return;
         // blink like the dashboard does
         float blink = (android.os.SystemClock.uptimeMillis() % 320) < 210 ? 1f : 0.45f;
         a *= blink;
-        if ((prompts & 1) != 0) sprite(texIndLeft, pack.indicators, ox, oy, 0, 0, 1, 1, null, a);
-        if ((prompts & 2) != 0) sprite(texIndRight, pack.indicators, ox, oy, 0, 0, 1, 1, null, a);
-        if ((prompts & 4) != 0) sprite(texIndBrake, pack.indicators, ox, oy, 0, 0, 1, 1, null, a);
-        if ((prompts & 8) != 0) sprite(texIndAccel, pack.indicators, ox, oy, 0, 0, 1, 1, null, a);
+        int[] r = lamps ? pack.lamps : pack.indicators;
+        if ((prompts & 1) != 0) sprite(lamps ? texLampLeft : texIndLeft, r, ox, oy, 0, 0, 1, 1, null, a);
+        if ((prompts & 2) != 0) sprite(lamps ? texLampRight : texIndRight, r, ox, oy, 0, 0, 1, 1, null, a);
+        if ((prompts & 4) != 0) sprite(lamps ? texLampBrake : texIndBrake, r, ox, oy, 0, 0, 1, 1, null, a);
+        if ((prompts & 8) != 0) sprite(lamps ? texLampAccel : texIndAccel, r, ox, oy, 0, 0, 1, 1, null, a);
     }
 
     private void sprite(int tex, int[] r, float dx, float dy, float u0, float v0, float u1, float v1, float[] key) {

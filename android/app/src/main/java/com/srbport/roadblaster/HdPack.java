@@ -39,6 +39,11 @@ public final class HdPack {
     // green indicator screen (format 2): clean background + prompt images, same rectangle
     public final int[] indicators = new int[4];
     public boolean hasIndicators;
+    // second car (last stretch of the story): three lamps instead of the green screen, and its
+    // own lever console; film time intervals where it is the car on screen
+    public final int[] lamps = new int[4];
+    public boolean hasLamps, hasLever2;
+    private double[] car2 = new double[0];
     // seconds between keyframes of hd.mp4 (0.5 in packs from 1.7.9 on; older packs: up to 5 s)
     public double keyframeInterval = 5.0;
     // SNES picture -> film pixels
@@ -77,6 +82,21 @@ public final class HdPack {
         if (ind != null) {
             rect(ind.getJSONArray("rect"), indicators);
             hasIndicators = new File(dir, "ind_clean.png").exists();
+        }
+        JSONObject c2 = j.optJSONObject("car2");
+        if (c2 != null) {
+            org.json.JSONArray fr = c2.getJSONArray("from");
+            car2 = new double[fr.length() * 2];
+            for (int i = 0; i < fr.length(); i++) {
+                car2[2 * i] = fr.getJSONArray(i).getDouble(0);
+                car2[2 * i + 1] = fr.getJSONArray(i).getDouble(1);
+            }
+            JSONObject lp = c2.optJSONObject("lamps");
+            if (lp != null) {
+                rect(lp.getJSONArray("rect"), lamps);
+                hasLamps = new File(dir, "lamp_clean.png").exists();
+            }
+            hasLever2 = c2.has("lever") && new File(dir, "lever2_mid.png").exists();
         }
         JSONObject lv = j.optJSONObject("lever");
         if (lv != null) {
@@ -190,6 +210,12 @@ public final class HdPack {
             off[1] += ldy[i] * unit;
         }
         return true;
+    }
+
+    /** Is the second car's dashboard the one on screen at film time t? */
+    public boolean car2At(double t) {
+        for (int i = 0; i + 1 < car2.length; i += 2) if (t >= car2[i] && t <= car2[i + 1]) return true;
+        return false;
     }
 
     public boolean dashboardAt(double t, float[] off) {
