@@ -47,6 +47,17 @@ Este repositorio **no contiene** la ROM, el archivo de datos `.msu`, las pistas 
 `.pcm` ni ninguna imagen, vídeo o sonido del juego o del anime. La app solo funciona con
 la copia que cargue cada usuario. Todo el mérito del juego es de sus autores (ver créditos).
 
+## Colaboradores
+
+| | Quién | Qué aportó |
+|---|---|---|
+| <img src="https://github.com/Mckeijas.png" width="48"> | [**Mckeijas**](https://github.com/Mckeijas) | Port para Android: launcher, Director's Mode, restauración HD, MSU-1 Enhanced, controles táctiles e icono SRBN. |
+| <img src="https://github.com/snesdev0815.png" width="48"> | [**snesdev0815**](https://github.com/snesdev0815) (d4s) | Autor de *Super Road Blaster* para SNES + MSU-1: todo el juego, programado en ensamblador 65816 ([código fuente](https://github.com/snesdev0815/SNES-SuperRoadBlaster), MIT). |
+| | **byuu (Near)** | Creador del chip MSU-1, que hace posible el vídeo y el audio del juego en SNES. |
+
+El resto de proyectos usados (Snes9x, AMD FSR, Sonic, dr_flac y las tipografías) están en
+[Créditos](#créditos). La lista completa también está en [CONTRIBUTORS.md](CONTRIBUTORS.md).
+
 ## Créditos
 
 ### La obra original
