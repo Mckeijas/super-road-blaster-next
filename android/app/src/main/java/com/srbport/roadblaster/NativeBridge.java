@@ -18,6 +18,7 @@ public final class NativeBridge {
     public static final int OPT_ENHANCED_AUDIO = 5;
     public static final int OPT_MSU_VOLUME = 6;
     public static final int OPT_SFX_VOLUME = 7;
+    public static final int OPT_DEV = 8;
 
     // SNES pad bits (libretro joypad ids)
     public static final int BTN_B = 1, BTN_Y = 1 << 1, BTN_SELECT = 1 << 2, BTN_START = 1 << 3;

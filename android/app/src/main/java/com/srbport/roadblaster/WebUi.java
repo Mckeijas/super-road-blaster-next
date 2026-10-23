@@ -54,6 +54,8 @@ public final class WebUi {
         if (e.getAction() == KeyEvent.ACTION_DOWN) {
             String js = "window.srbPad && window.srbPad('" + tok + "'," + (e.getRepeatCount() > 0) + ")";
             wv.evaluateJavascript(js, null);
+        } else if (e.getAction() == KeyEvent.ACTION_UP) {
+            wv.evaluateJavascript("window.srbPadUp && window.srbPadUp('" + tok + "')", null);
         }
         return true;
     }

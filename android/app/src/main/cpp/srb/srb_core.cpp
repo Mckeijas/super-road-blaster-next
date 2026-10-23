@@ -352,6 +352,7 @@ struct State {
     std::atomic<bool> paused{false};
     std::atomic<int> autoQte{QTE_OFF};
     std::atomic<bool> infiniteLives{false};
+    std::atomic<bool> devMode{false};      // no clean-run conditions for the "!" and the end image
     std::atomic<bool> movieMode{false};
     std::atomic<bool> hudVisible{true};
     std::atomic<float> speed{1.0f};
@@ -1078,7 +1079,7 @@ void runTick() {
     int tr = trackNow();
     if (tr >= 0 && tr != g->runTrack) {
         if (tr == 0) {                              // game-over screen: end of this game
-            if (g->runClean && g->runLastStory == kFinalChapter) {
+            if ((g->runClean || g->devMode.load()) && g->runLastStory == kFinalChapter) {
                 int s = 0, l = 0;
                 if (playerStats(&s, &l)) {
                     g->runDone = true;
@@ -1147,6 +1148,7 @@ void setButtons(uint16_t mask) { if (g) g->padMask = mask; }
 void setPaused(bool p) { if (g) g->paused = p; }
 void setAutoQte(int mode) { if (g) g->autoQte = mode; }
 void setInfiniteLives(bool on) { if (g) g->infiniteLives = on; }
+void setDevMode(bool on) { if (g) g->devMode = on; }
 void setSpeed(float s) { if (g) g->speed = std::max(0.2f, std::min(2.0f, s)); }
 void setMovieMode(bool on) { if (g) g->movieMode = on; }
 void setHudVisible(bool on) { if (g) g->hudVisible = on; }

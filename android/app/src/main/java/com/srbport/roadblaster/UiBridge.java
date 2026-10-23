@@ -38,6 +38,10 @@ public final class UiBridge {
         try {
             JSONObject o = new JSONObject();
             o.put("settings", settings.toJson());
+            try {
+                o.put("version", activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName);
+            } catch (Exception ignored) {
+            }
             // scene availability comes from the data generated on this device after importing
             JSONArray chapters = new JSONArray(GameData.readAssetText(activity.getAssets(), GameData.CHAPTERS_JSON));
             for (int i = 0; i < chapters.length(); i++) {

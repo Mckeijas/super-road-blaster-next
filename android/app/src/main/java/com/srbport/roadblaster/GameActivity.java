@@ -202,6 +202,7 @@ public final class GameActivity extends Activity implements EmuThread.Listener, 
         NativeBridge.nativeSetOption(NativeBridge.OPT_ENHANCED_AUDIO, "enhanced".equals(settings.get("audio")) ? 1 : 0);
         NativeBridge.nativeSetOption(NativeBridge.OPT_MSU_VOLUME, settings.num("msuVol", 100) / 100f);
         NativeBridge.nativeSetOption(NativeBridge.OPT_SFX_VOLUME, settings.num("sfxVol", 100) / 100f);
+        NativeBridge.nativeSetOption(NativeBridge.OPT_DEV, settings.flag("dev") ? 1 : 0);
         pad.setLayout(settings.get("layout"));
         renderer.configure(settings.get("filter"), settings.flag("color"), settings.get("aspect"));
         String touchMode = settings.get("touch");

@@ -58,6 +58,7 @@ enum Option {
     OPT_ENHANCED_AUDIO = 5,
     OPT_MSU_VOLUME = 6,
     OPT_SFX_VOLUME = 7,
+    OPT_DEV = 8,
 };
 float gMsuVol = 1.0f, gSfxVol = 1.0f;
 } // namespace
@@ -126,6 +127,7 @@ JNIFN(void, nativeSetOption)(JNIEnv *, jclass, jint id, jfloat v) {
     case OPT_ENHANCED_AUDIO: srb::setEnhancedAudio(v != 0.0f); break;
     case OPT_MSU_VOLUME: gMsuVol = v; srb::setVolumes(gMsuVol, gSfxVol); break;
     case OPT_SFX_VOLUME: gSfxVol = v; srb::setVolumes(gMsuVol, gSfxVol); break;
+    case OPT_DEV: srb::setDevMode(v != 0.0f); break;
     default: break;
     }
 }

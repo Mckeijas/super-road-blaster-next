@@ -584,6 +584,7 @@
 
   // ---- "Desarrollador"
   const dev = { n: 0, last: 0 };
+  const held = {};             // pad keys held down (window.srbPadUp releases them)
   function devRow() {
     const on = setting('dev') === '1';
     return '<div class="opt action dev' + (on ? ' on' : '') + '" data-f data-act="dev"><div class="lbl">Desarrollador<small>' +
@@ -595,6 +596,7 @@
     dev.n = now - dev.last < 1200 ? dev.n + 1 : 1;
     dev.last = now;
     const on = setting('dev') === '1';
+    if (!held.DOWN) { dev.n = 0; Sfx.play('error', 0.4); return; }
     if (dev.n < 5) { Sfx.play('error', 0.4); return; }   // looks like a locked button: no hint of a count
     dev.n = 0;
     setSetting('dev', on ? '0' : '1');
@@ -714,7 +716,7 @@
     if (ui.zone === 'panel' && $('main.panel .opt.focus[data-opt]')) k += '<span data-tok="RIGHT"><span class="key">◀ ▶</span>Cambiar</span>';
     if (P(sec) === 'scenes') k += '<span><span class="key" data-tok="L">L</span><span class="key" data-tok="R">R</span>Nivel</span>';
     if (P(sec) === 'graphics' && !PAUSE) k += '<span data-tok="Y"><span class="key y">Y</span>Comparar</span><span data-tok="X"><span class="key x">X</span>Otra imagen</span>';
-    if (!PAUSE) k += '<span class="ver">Mckeijas</span>';
+    if (!PAUSE) k += '<span class="ver">Mckeijas' + (S.version ? ' · v' + esc(S.version) : '') + '</span>';
     const html = k;
     const f = $('footer');
     if (f.dataset.h !== html) { f.innerHTML = html; f.dataset.h = html; }
@@ -1112,14 +1114,17 @@
   }
 
   // ---------------------------------------------------------------- entry points
-  window.srbPad = (tok) => press(tok);
+  window.srbPad = (tok) => { held[tok] = true; press(tok); };
+  window.srbPadUp = (tok) => { held[tok] = false; };
   window.srbRefresh = refresh;
   function defaultTab() {
     const id = PAUSE ? (S.extra && S.extra.chapter) : +S.resumeChapter;
     const c = S.byId[id];
     return c ? c.level : 1;
   }
+  const releaseKeys = () => { for (const k in held) held[k] = false; };
   window.srbOpenMini = () => {
+    releaseKeys();
     loadState();
     mini = true; miniIdx = 0; miniView = 'main'; miniNote = '';
     document.body.classList.add('minimode');
@@ -1127,6 +1132,7 @@
     Sfx.play('open', 0.5);
   };
   window.srbOpen = () => {
+    releaseKeys();
     mini = false;
     document.body.classList.remove('minimode');
     ui.sec = 0; ui.zone = 'menu';
@@ -1136,13 +1142,17 @@
     refresh();
     Sfx.play('open', 0.6);
   };
-  window.srbClose = () => { mini = false; document.body.classList.remove('minimode'); $$('video').forEach((v) => v.pause()); };
+  window.srbClose = () => { releaseKeys(); mini = false; document.body.classList.remove('minimode'); $$('video').forEach((v) => v.pause()); };
   window.srbToast = toast;
   document.addEventListener('keydown', (e) => {
     if (window.Android) return; // on device keys come from the activity
     const map = { ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', Enter: 'A', Escape: 'B',
       Backspace: 'B', x: 'X', y: 'Y', q: 'L', e: 'R' };
-    if (map[e.key]) { e.preventDefault(); press(map[e.key]); }
+    if (map[e.key]) { e.preventDefault(); held[map[e.key]] = true; press(map[e.key]); }
+  });
+  document.addEventListener('keyup', (e) => {
+    if (window.Android) return;
+    if (e.key === 'ArrowDown') held.DOWN = false;
   });
   window.addEventListener('resize', () => { updateFocus(); });
   $('main.panel').addEventListener('click', onPanelTap);
@@ -1158,7 +1168,7 @@
   }
   window.srbSleep = sleepMedia;
   window.srbWake = wakeMedia;
-  document.addEventListener('visibilitychange', () => { if (document.hidden) sleepMedia(); else if (!PAUSE) wakeMedia(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { sleepMedia(); releaseKeys(); } else if (!PAUSE) wakeMedia(); });
 
   loadState();
   ui.tab = defaultTab();

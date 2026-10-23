@@ -74,6 +74,7 @@ void setPaused(bool paused);
 // Director's Mode -------------------------------------------------------------
 void setAutoQte(int mode);        // AutoQte
 void setInfiniteLives(bool on);
+void setDevMode(bool on);         // finishing the game always counts for the "!" and the end image
 void setSpeed(float speed);       // 0.2 .. 2.0 (slow motion / fast forward, pitch preserved)
 void setMovieMode(bool on);       // full auto + HUD hidden
 void setHudVisible(bool on);
